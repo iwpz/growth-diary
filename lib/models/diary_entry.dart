@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import '../utils/age_calculator.dart';
 
 class DiaryEntry {
   final String id;
@@ -44,18 +45,6 @@ class DiaryEntry {
   }
 
   String getAgeLabel() {
-    if (ageInMonths == 0) {
-      return '出生';
-    } else if (ageInMonths < 12) {
-      return '$ageInMonths月龄';
-    } else {
-      int years = ageInMonths ~/ 12;
-      int months = ageInMonths % 12;
-      if (months == 0) {
-        return '$years岁';
-      } else {
-        return '$years岁$months月';
-      }
-    }
+    return AgeCalculator.formatAgeLabel(ageInMonths);
   }
 }

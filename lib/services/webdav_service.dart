@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import '../models/diary_entry.dart';
 import '../models/app_config.dart';
@@ -25,17 +26,20 @@ class WebDAVService {
       try {
         await _client!.mkdir('growth_diary');
       } catch (e) {
-        // Directory might already exist
+        // Ignore if directory already exists (409 Conflict)
+        debugPrint('mkdir growth_diary: $e');
       }
       try {
         await _client!.mkdir('growth_diary/entries');
       } catch (e) {
-        // Directory might already exist
+        // Ignore if directory already exists (409 Conflict)
+        debugPrint('mkdir growth_diary/entries: $e');
       }
       try {
         await _client!.mkdir('growth_diary/media');
       } catch (e) {
-        // Directory might already exist
+        // Ignore if directory already exists (409 Conflict)
+        debugPrint('mkdir growth_diary/media: $e');
       }
     }
   }
@@ -50,7 +54,7 @@ class WebDAVService {
         'growth_diary/config.json',
       );
     } catch (e) {
-      print('Error saving config: $e');
+      debugPrint('Error saving config: $e');
       rethrow;
     }
   }
@@ -63,7 +67,7 @@ class WebDAVService {
       final jsonData = jsonDecode(content);
       return AppConfig.fromJson(jsonData);
     } catch (e) {
-      print('Error loading config: $e');
+      debugPrint('Error loading config: $e');
       return null;
     }
   }
@@ -78,7 +82,7 @@ class WebDAVService {
         'growth_diary/entries/${entry.id}.json',
       );
     } catch (e) {
-      print('Error saving diary entry: $e');
+      debugPrint('Error saving diary entry: $e');
       rethrow;
     }
   }
@@ -97,7 +101,7 @@ class WebDAVService {
             final jsonData = jsonDecode(content);
             entries.add(DiaryEntry.fromJson(jsonData));
           } catch (e) {
-            print('Error loading entry ${file.name}: $e');
+            debugPrint('Error loading entry ${file.name}: $e');
           }
         }
       }
@@ -106,7 +110,7 @@ class WebDAVService {
       entries.sort((a, b) => b.date.compareTo(a.date));
       return entries;
     } catch (e) {
-      print('Error loading entries: $e');
+      debugPrint('Error loading entries: $e');
       return [];
     }
   }
@@ -119,7 +123,7 @@ class WebDAVService {
       await _client!.writeFromFile(file.path, path);
       return path;
     } catch (e) {
-      print('Error uploading media: $e');
+      debugPrint('Error uploading media: $e');
       rethrow;
     }
   }
@@ -130,7 +134,7 @@ class WebDAVService {
     try {
       await _client!.remove('growth_diary/entries/$entryId.json');
     } catch (e) {
-      print('Error deleting entry: $e');
+      debugPrint('Error deleting entry: $e');
       rethrow;
     }
   }

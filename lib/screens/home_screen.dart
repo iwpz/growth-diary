@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
+import '../utils/age_calculator.dart';
 import 'entry_detail_screen.dart';
 import 'new_entry_screen.dart';
 import 'settings_screen.dart';
@@ -55,8 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int _calculateAgeInMonths(DateTime date) {
     final birthDate = widget.config.childBirthDate!;
-    final diff = date.difference(birthDate);
-    return (diff.inDays / 30.44).floor();
+    return AgeCalculator.calculateAgeInMonths(birthDate, date);
   }
 
   @override

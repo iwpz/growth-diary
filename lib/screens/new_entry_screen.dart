@@ -5,6 +5,7 @@ import 'package:path/path.dart' as path;
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
+import '../utils/age_calculator.dart';
 
 class NewEntryScreen extends StatefulWidget {
   final AppConfig config;
@@ -101,8 +102,7 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
 
   int _calculateAgeInMonths(DateTime date) {
     final birthDate = widget.config.childBirthDate!;
-    final diff = date.difference(birthDate);
-    return (diff.inDays / 30.44).floor().clamp(0, double.infinity).toInt();
+    return AgeCalculator.calculateAgeInMonths(birthDate, date);
   }
 
   Future<void> _saveEntry() async {
