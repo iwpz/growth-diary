@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
 
-class EntryDetailScreen extends StatelessWidget {
+class EntryDetailScreen extends StatefulWidget {
   final DiaryEntry entry;
   final WebDAVService webdavService;
 
@@ -13,10 +14,108 @@ class EntryDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<EntryDetailScreen> createState() => _EntryDetailScreenState();
+}
+
+class _EntryDetailScreenState extends State<EntryDetailScreen> {
+  final Map<String, Uint8List?> _imageCache = {};
+  final Map<String, bool> _loadingImages = {};
+  final Map<String, Uint8List?> _videoThumbnailCache = {};
+  final Map<String, bool> _loadingVideoThumbnails = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImages();
+    _loadVideoThumbnails();
+  }
+
+  Future<void> _loadImages() async {
+    for (var path in widget.entry.imageThumbnails) {
+      if (!_imageCache.containsKey(path)) {
+        setState(() {
+          _loadingImages[path] = true;
+        });
+        try {
+          final data = await widget.webdavService.downloadMedia(path);
+          if (data != null && mounted) {
+            setState(() {
+              _imageCache[path] = data;
+              _loadingImages[path] = false;
+            });
+          }
+        } catch (e) {
+          debugPrint('Error loading image thumbnail $path: $e');
+          if (mounted) {
+            setState(() {
+              _loadingImages[path] = false;
+            });
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> _loadVideoThumbnails() async {
+    for (var path in widget.entry.videoThumbnails) {
+      if (!_videoThumbnailCache.containsKey(path)) {
+        setState(() {
+          _loadingVideoThumbnails[path] = true;
+        });
+        try {
+          final data = await widget.webdavService.downloadMedia(path);
+          if (data != null && mounted) {
+            setState(() {
+              _videoThumbnailCache[path] = data;
+              _loadingVideoThumbnails[path] = false;
+            });
+          }
+        } catch (e) {
+          debugPrint('Error loading video thumbnail $path: $e');
+          if (mounted) {
+            setState(() {
+              _loadingVideoThumbnails[path] = false;
+            });
+          }
+        }
+      }
+    }
+  }
+
+  void _showFullScreenImage(Uint8List imageData, int initialIndex) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => FullScreenImageView(
+          imagePaths: widget.entry.imagePaths,
+          webdavService: widget.webdavService,
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+  }
+
+  void _showFullScreenVideo(String videoPath) {
+    // 暂时显示一个简单的对话框，未来可以实现视频播放
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('视频播放'),
+        content: const Text('视频播放功能即将实现'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(entry.title),
+        title: Text(widget.entry.title),
         backgroundColor: Colors.pink.shade100,
         actions: [
           IconButton(
@@ -34,7 +133,8 @@ class EntryDetailScreen extends StatelessWidget {
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child: const Text('删除', style: TextStyle(color: Colors.red)),
+                      child:
+                          const Text('删除', style: TextStyle(color: Colors.red)),
                     ),
                   ],
                 ),
@@ -42,7 +142,7 @@ class EntryDetailScreen extends StatelessWidget {
 
               if (confirm == true) {
                 try {
-                  await webdavService.deleteEntry(entry.id);
+                  await widget.webdavService.deleteEntry(widget.entry);
                   if (context.mounted) {
                     Navigator.pop(context);
                   }
@@ -76,7 +176,7 @@ class EntryDetailScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        entry.getAgeLabel(),
+                        widget.entry.getAgeLabel(),
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -85,7 +185,7 @@ class EntryDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${entry.date.year}-${entry.date.month.toString().padLeft(2, '0')}-${entry.date.day.toString().padLeft(2, '0')}',
+                        '${widget.entry.date.year}-${widget.entry.date.month.toString().padLeft(2, '0')}-${widget.entry.date.day.toString().padLeft(2, '0')}',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey.shade700,
@@ -112,13 +212,13 @@ class EntryDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              entry.title,
+              widget.entry.title,
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            if (entry.description.isNotEmpty) ...[
+            if (widget.entry.description.isNotEmpty) ...[
               const SizedBox(height: 20),
               const Text(
                 '描述',
@@ -130,11 +230,11 @@ class EntryDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                entry.description,
+                widget.entry.description,
                 style: const TextStyle(fontSize: 16, height: 1.5),
               ),
             ],
-            if (entry.imagePaths.isNotEmpty) ...[
+            if (widget.entry.imagePaths.isNotEmpty) ...[
               const SizedBox(height: 20),
               const Text(
                 '照片',
@@ -146,7 +246,7 @@ class EntryDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '${entry.imagePaths.length} 张照片（存储在 WebDAV）',
+                '${widget.entry.imagePaths.length} 张照片（存储在 WebDAV）',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -161,25 +261,46 @@ class EntryDetailScreen extends StatelessWidget {
                   crossAxisSpacing: 8,
                   mainAxisSpacing: 8,
                 ),
-                itemCount: entry.imagePaths.length,
+                itemCount: widget.entry.imagePaths.length,
                 itemBuilder: (context, index) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        Icons.image,
-                        size: 40,
-                        color: Colors.grey.shade400,
+                  final path = widget.entry.imagePaths[index];
+                  final imageData = _imageCache[path];
+                  final isLoading = _loadingImages[path] ?? false;
+
+                  return GestureDetector(
+                    onTap: imageData != null
+                        ? () => _showFullScreenImage(imageData, index)
+                        : null,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                      child: isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : imageData != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.memory(
+                                    imageData,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                  ),
+                                )
+                              : const Center(
+                                  child: Icon(
+                                    Icons.image,
+                                    size: 40,
+                                    color: Colors.grey,
+                                  ),
+                                ),
                     ),
                   );
                 },
               ),
             ],
-            if (entry.videoPaths.isNotEmpty) ...[
+            if (widget.entry.videoPaths.isNotEmpty) ...[
               const SizedBox(height: 20),
               const Text(
                 '视频',
@@ -191,7 +312,7 @@ class EntryDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '${entry.videoPaths.length} 个视频（存储在 WebDAV）',
+                '${widget.entry.videoPaths.length} 个视频（存储在 WebDAV）',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -199,12 +320,46 @@ class EntryDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Column(
-                children: entry.videoPaths.asMap().entries.map((videoEntry) {
-                  return Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.videocam, color: Colors.purple),
-                      title: Text('视频 ${videoEntry.key + 1}'),
-                      subtitle: Text(videoEntry.value),
+                children:
+                    widget.entry.videoPaths.asMap().entries.map((videoEntry) {
+                  final index = videoEntry.key;
+                  final path = videoEntry.value;
+                  final thumbnail = _videoThumbnailCache[path];
+                  final isLoading = _loadingVideoThumbnails[path] ?? false;
+
+                  return GestureDetector(
+                    onTap: () => _showFullScreenVideo(path),
+                    child: Card(
+                      child: ListTile(
+                        leading: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: isLoading
+                              ? const Center(child: CircularProgressIndicator())
+                              : thumbnail != null
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.memory(
+                                        thumbnail,
+                                        fit: BoxFit.cover,
+                                        width: 60,
+                                        height: 60,
+                                      ),
+                                    )
+                                  : const Center(
+                                      child: Icon(
+                                        Icons.videocam,
+                                        color: Colors.purple,
+                                      ),
+                                    ),
+                        ),
+                        title: Text('视频 ${index + 1}'),
+                        subtitle: Text(path),
+                      ),
                     ),
                   );
                 }).toList(),
@@ -212,6 +367,124 @@ class EntryDetailScreen extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class FullScreenImageView extends StatefulWidget {
+  final List<String> imagePaths;
+  final WebDAVService webdavService;
+  final int initialIndex;
+
+  const FullScreenImageView({
+    super.key,
+    required this.imagePaths,
+    required this.webdavService,
+    this.initialIndex = 0,
+  });
+
+  @override
+  State<FullScreenImageView> createState() => _FullScreenImageViewState();
+}
+
+class _FullScreenImageViewState extends State<FullScreenImageView> {
+  late PageController _pageController;
+  late int _currentIndex;
+  final Map<int, Uint8List?> _fullImageCache = {};
+  final Map<int, bool> _loadingFullImages = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _loadFullImage(widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadFullImage(int index) async {
+    if (index < 0 || index >= widget.imagePaths.length) return;
+
+    if (!_fullImageCache.containsKey(index)) {
+      setState(() {
+        _loadingFullImages[index] = true;
+      });
+      try {
+        final data =
+            await widget.webdavService.downloadMedia(widget.imagePaths[index]);
+        if (data != null && mounted) {
+          setState(() {
+            _fullImageCache[index] = data;
+            _loadingFullImages[index] = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading full image ${widget.imagePaths[index]}: $e');
+        if (mounted) {
+          setState(() {
+            _loadingFullImages[index] = false;
+          });
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text('${_currentIndex + 1} / ${widget.imagePaths.length}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        onPageChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+          _loadFullImage(index);
+        },
+        itemCount: widget.imagePaths.length,
+        itemBuilder: (context, index) {
+          final imageData = _fullImageCache[index];
+          final isLoading = _loadingFullImages[index] ?? false;
+
+          if (isLoading) {
+            return const Center(
+                child: CircularProgressIndicator(color: Colors.white));
+          } else if (imageData != null) {
+            return InteractiveViewer(
+              child: Center(
+                child: Image.memory(
+                  imageData,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            );
+          } else {
+            return const Center(
+              child: Icon(
+                Icons.image,
+                color: Colors.white,
+                size: 100,
+              ),
+            );
+          }
+        },
       ),
     );
   }

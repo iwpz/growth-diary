@@ -69,10 +69,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
           _buildSection('应用'),
-          ListTile(
-            leading: const Icon(Icons.info),
-            title: const Text('关于'),
-            subtitle: const Text('成长日记 v1.0.0'),
+          const ListTile(
+            leading: Icon(Icons.info),
+            title: Text('关于'),
+            subtitle: Text('成长日记 v1.0.0'),
           ),
           ListTile(
             leading: const Icon(Icons.edit, color: Colors.blue),

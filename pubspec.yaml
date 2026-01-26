@@ -18,6 +18,9 @@ dependencies:
   webdav_client: ^1.2.1
   path: ^1.8.3
   uuid: ^4.3.3
+  exif: ^3.3.0
+  video_thumbnail: ^0.5.6
+  image: ^4.7.2
 
 dev_dependencies:
   flutter_test:

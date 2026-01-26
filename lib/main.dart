@@ -3,7 +3,6 @@ import 'screens/home_screen.dart';
 import 'screens/setup_screen.dart';
 import 'services/local_storage_service.dart';
 import 'services/webdav_service.dart';
-import 'models/app_config.dart';
 
 void main() {
   runApp(const MyApp());
@@ -50,16 +49,16 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<void> _initializeApp() async {
     // Load config from local storage
     final config = await _localStorage.loadConfig();
-    
+
     if (config != null && config.isConfigured) {
       try {
         // Initialize WebDAV service
         await _webdavService.initialize(config);
-        
+
         // Try to load config from WebDAV (might have been updated)
         final webdavConfig = await _webdavService.loadConfig();
         final finalConfig = webdavConfig ?? config;
-        
+
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(

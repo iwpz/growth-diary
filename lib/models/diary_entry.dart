@@ -8,6 +8,8 @@ class DiaryEntry {
   final String description;
   final List<String> imagePaths;
   final List<String> videoPaths;
+  final List<String> imageThumbnails; // 小号缩略图，用于时间轴
+  final List<String> videoThumbnails; // 小号缩略图，用于时间轴
   final int ageInMonths;
 
   DiaryEntry({
@@ -17,6 +19,8 @@ class DiaryEntry {
     this.description = '',
     this.imagePaths = const [],
     this.videoPaths = const [],
+    this.imageThumbnails = const [],
+    this.videoThumbnails = const [],
     required this.ageInMonths,
   }) : id = id ?? const Uuid().v4();
 
@@ -28,6 +32,8 @@ class DiaryEntry {
       'description': description,
       'imagePaths': imagePaths,
       'videoPaths': videoPaths,
+      'imageThumbnails': imageThumbnails,
+      'videoThumbnails': videoThumbnails,
       'ageInMonths': ageInMonths,
     };
   }
@@ -40,6 +46,8 @@ class DiaryEntry {
       description: json['description'] ?? '',
       imagePaths: List<String>.from(json['imagePaths'] ?? []),
       videoPaths: List<String>.from(json['videoPaths'] ?? []),
+      imageThumbnails: List<String>.from(json['imageThumbnails'] ?? []),
+      videoThumbnails: List<String>.from(json['videoThumbnails'] ?? []),
       ageInMonths: json['ageInMonths'],
     );
   }
