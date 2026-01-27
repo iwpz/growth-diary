@@ -184,29 +184,39 @@ class WebDAVService {
       await _client!.writeFromFile(file.path, originalPath);
 
       // 生成缩略图
-      final thumbnail = await VideoThumbnail.thumbnailData(
+      Uint8List? thumbnail = await VideoThumbnail.thumbnailData(
         video: file.path,
         imageFormat: ImageFormat.JPEG,
         maxWidth: 400, // 中号缩略图
         quality: 75,
       );
 
-      if (thumbnail != null) {
-        final mediumFileName = '${fileName}_medium.jpg';
-        final mediumPath = 'growth_diary/media/$mediumFileName';
-        await _client!.write(mediumPath, thumbnail);
+      if (thumbnail == null) {
+        // 生成默认缩略图
+        final defaultImage = img.Image(width: 400, height: 300);
+        img.fillRect(defaultImage,
+            x1: 0,
+            y1: 0,
+            x2: 400,
+            y2: 300,
+            color: img.ColorUint8.rgba(0, 0, 0, 255)); // 黑色
+        thumbnail = img.encodeJpg(defaultImage, quality: 75);
+      }
 
-        // 生成小号缩略图
-        final image = img.decodeImage(thumbnail);
-        if (image != null) {
-          final smallThumbnail = img.copyResize(image, width: 200);
-          final smallData = img.encodeJpg(smallThumbnail, quality: 70);
-          final smallFileName = '${fileName}_small.jpg';
-          final smallPath = 'growth_diary/media/$smallFileName';
-          await _client!.write(smallPath, smallData);
+      final mediumFileName = '${fileName}_medium.jpg';
+      final mediumPath = 'growth_diary/media/$mediumFileName';
+      await _client!.write(mediumPath, thumbnail);
 
-          return '$originalPath|$mediumPath|$smallPath';
-        }
+      // 生成小号缩略图
+      final image = img.decodeImage(thumbnail);
+      if (image != null) {
+        final smallThumbnail = img.copyResize(image, width: 200);
+        final smallData = img.encodeJpg(smallThumbnail, quality: 70);
+        final smallFileName = '${fileName}_small.jpg';
+        final smallPath = 'growth_diary/media/$smallFileName';
+        await _client!.write(smallPath, smallData);
+
+        return '$originalPath|$mediumPath|$smallPath';
       }
 
       return originalPath;

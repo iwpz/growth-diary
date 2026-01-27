@@ -1,23 +1,22 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as path;
-import 'package:exif/exif.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
-import '../utils/age_calculator.dart';
+import '../services/entry_creation_service.dart';
 
 class NewEntryScreen extends StatefulWidget {
   final AppConfig config;
   final WebDAVService webdavService;
   final DiaryEntry? existingEntry;
+  final String? initialMode; // 'media' or 'text'
 
   const NewEntryScreen({
     super.key,
     required this.config,
     required this.webdavService,
     this.existingEntry,
+    this.initialMode,
   });
 
   @override
@@ -27,37 +26,22 @@ class NewEntryScreen extends StatefulWidget {
 class _NewEntryScreenState extends State<NewEntryScreen> {
   bool _isLoading = false;
   final ImagePicker _picker = ImagePicker();
+  late final EntryCreationService _entryService;
 
   @override
   void initState() {
     super.initState();
-    // 编辑现有记录的功能暂时移除，因为新界面不支持
-  }
-
-  DateTime _parseExifDate(String exifDate) {
-    // EXIF日期格式: "YYYY:MM:DD HH:MM:SS"
-    final parts = exifDate.split(' ');
-    if (parts.length == 2) {
-      final dateParts = parts[0].split(':');
-      final timeParts = parts[1].split(':');
-      if (dateParts.length == 3 && timeParts.length == 3) {
-        return DateTime(
-          int.parse(dateParts[0]),
-          int.parse(dateParts[1]),
-          int.parse(dateParts[2]),
-          int.parse(timeParts[0]),
-          int.parse(timeParts[1]),
-          int.parse(timeParts[2]),
-        );
-      }
+    _entryService = EntryCreationService(widget.webdavService);
+    // 如果有初始模式，直接执行
+    if (widget.initialMode != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (widget.initialMode == 'media') {
+          _addMediaEntry();
+        } else if (widget.initialMode == 'text') {
+          _addTextEntry();
+        }
+      });
     }
-    // 如果解析失败，返回当前时间
-    return DateTime.now();
-  }
-
-  int _calculateAgeInMonths(DateTime date) {
-    final birthDate = widget.config.childBirthDate!;
-    return AgeCalculator.calculateAgeInMonths(birthDate, date);
   }
 
   Future<String?> _showDescriptionDialog() async {
@@ -110,123 +94,24 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
     );
   }
 
-  Future<void> _addImageEntry() async {
+  Future<void> _addMediaEntry() async {
     try {
-      final List<XFile> images = await _picker.pickMultiImage();
-      if (images.isEmpty) return;
+      final List<XFile> media = await _picker.pickMultipleMedia();
+      if (media.isEmpty) return;
 
       final String? description = await _showDescriptionDialog();
       if (description == null) return;
 
       setState(() => _isLoading = true);
 
-      // 使用第一张图片的EXIF拍摄日期或创建日期作为记录日期
-      final firstImage = File(images.first.path);
-      DateTime date;
-      try {
-        final exifData =
-            await readExifFromBytes(await firstImage.readAsBytes());
-        final dateTimeOriginal = exifData['EXIF DateTimeOriginal'];
-        final imageDateTime = exifData['Image DateTime'];
-        if (dateTimeOriginal != null) {
-          date = _parseExifDate(dateTimeOriginal.toString());
-        } else if (imageDateTime != null) {
-          date = _parseExifDate(imageDateTime.toString());
-        } else {
-          final stat = await firstImage.stat();
-          date = stat.changed;
-        }
-      } catch (e) {
-        final stat = await firstImage.stat();
-        date = stat.changed;
-      }
-
-      final List<String> imagePaths = [];
-      final List<String> imageThumbnails = [];
-      for (var xfile in images) {
-        final file = File(xfile.path);
-        final fileName =
-            '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}';
-        final paths = await widget.webdavService
-            .uploadImageWithThumbnails(file, fileName);
-        final pathList = paths.split('|');
-        if (pathList.length >= 3) {
-          imagePaths.add(pathList[0]); // 原图
-          imageThumbnails.add(pathList[2]); // 小号缩略图
-        } else {
-          imagePaths.add(paths);
-          imageThumbnails.add(paths); // 如果没有缩略图，使用原图
-        }
-      }
-
-      final entry = DiaryEntry(
-        id: null,
-        date: date,
-        title: description.isNotEmpty ? description : '图片记录',
-        description: description,
-        imagePaths: imagePaths,
-        videoPaths: [],
-        imageThumbnails: imageThumbnails,
-        videoThumbnails: [],
-        ageInMonths: _calculateAgeInMonths(date),
-      );
-
-      await widget.webdavService.saveDiaryEntry(entry);
+      await _entryService.createMediaEntry(media, description, widget.config);
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('添加图片记录失败: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _addVideoEntry() async {
-    try {
-      final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
-      if (video == null) return;
-
-      final String? description = await _showDescriptionDialog();
-      if (description == null) return;
-
-      setState(() => _isLoading = true);
-
-      final file = File(video.path);
-      final stat = await file.stat();
-      final date = stat.changed;
-
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}';
-      final paths =
-          await widget.webdavService.uploadVideoWithThumbnails(file, fileName);
-      final pathList = paths.split('|');
-      final uploadedPath = pathList[0];
-      final thumbnailPath = pathList.length >= 3 ? pathList[2] : paths;
-
-      final entry = DiaryEntry(
-        id: null,
-        date: date,
-        title: description.isNotEmpty ? description : '视频记录',
-        description: description,
-        imagePaths: [],
-        videoPaths: [uploadedPath],
-        imageThumbnails: [],
-        videoThumbnails: [thumbnailPath],
-        ageInMonths: _calculateAgeInMonths(date),
-      );
-
-      await widget.webdavService.saveDiaryEntry(entry);
-
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('添加视频记录失败: $e')),
+        SnackBar(content: Text('添加媒体记录失败: $e')),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -240,19 +125,7 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
 
       setState(() => _isLoading = true);
 
-      final date = DateTime.now();
-
-      final entry = DiaryEntry(
-        id: null,
-        date: date,
-        title: text,
-        description: '',
-        imagePaths: [],
-        videoPaths: [],
-        ageInMonths: _calculateAgeInMonths(date),
-      );
-
-      await widget.webdavService.saveDiaryEntry(entry);
+      await _entryService.createTextEntry(text, widget.config);
 
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -281,23 +154,12 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: _addImageEntry,
-                    icon: const Icon(Icons.photo),
-                    label: const Text('添加图片'),
+                    onPressed: _addMediaEntry,
+                    icon: const Icon(Icons.perm_media),
+                    label: const Text('添加媒体'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.pink.shade50,
                       foregroundColor: Colors.pink.shade700,
-                      minimumSize: const Size(double.infinity, 60),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _addVideoEntry,
-                    icon: const Icon(Icons.videocam),
-                    label: const Text('添加视频'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple.shade50,
-                      foregroundColor: Colors.purple.shade700,
                       minimumSize: const Size(double.infinity, 60),
                     ),
                   ),

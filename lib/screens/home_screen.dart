@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
+import '../services/entry_creation_service.dart';
 import 'entry_detail_screen.dart';
-import 'new_entry_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -26,10 +27,14 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   final Map<String, Uint8List?> _thumbnailCache = {};
   final Map<String, Future<Uint8List?>> _thumbnailFutures = {};
+  bool _isExpanded = false;
+  final ImagePicker _picker = ImagePicker();
+  late final EntryCreationService _entryService;
 
   @override
   void initState() {
     super.initState();
+    _entryService = EntryCreationService(widget.webdavService);
     _loadEntries();
   }
 
@@ -56,6 +61,107 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _toggleExpanded() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+    });
+  }
+
+  Future<String?> _showDescriptionDialog() async {
+    String description = '';
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('添加描述（可选）'),
+        content: TextField(
+          onChanged: (value) => description = value,
+          decoration: const InputDecoration(hintText: '请输入描述'),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(description),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _showTextDialog() async {
+    String text = '';
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('输入文本记录'),
+        content: TextField(
+          onChanged: (value) => text = value,
+          decoration: const InputDecoration(hintText: '请输入文本'),
+          maxLines: 5,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(text),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addMedia() async {
+    print('Add media button pressed');
+    _toggleExpanded(); // 关闭菜单
+    try {
+      final List<XFile> media = await _picker.pickMultipleMedia();
+      if (media.isEmpty) return;
+
+      final String? description = await _showDescriptionDialog();
+      if (description == null) return;
+
+      setState(() => _isLoading = true);
+
+      await _entryService.createMediaEntry(media, description, widget.config);
+
+      _loadEntries();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('添加媒体记录失败: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _addText() async {
+    print('Add text button pressed');
+    _toggleExpanded(); // 关闭菜单
+    try {
+      final String? text = await _showTextDialog();
+      if (text == null || text.isEmpty) return;
+
+      setState(() => _isLoading = true);
+
+      await _entryService.createTextEntry(text, widget.config);
+
+      _loadEntries();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('添加文本记录失败: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -79,30 +185,61 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _entries.isEmpty
-              ? _buildEmptyState()
-              : _buildTimeline(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => NewEntryScreen(
-                config: widget.config,
-                webdavService: widget.webdavService,
-              ),
+      body: Stack(
+        children: [
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _entries.isEmpty
+                  ? _buildEmptyState()
+                  : _buildTimeline(),
+          Positioned(
+            bottom: 16.0,
+            right: 16.0,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // 媒体按钮 - 向上展开
+                if (_isExpanded)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: FloatingActionButton(
+                      heroTag: 'media_fab',
+                      onPressed: _addMedia,
+                      backgroundColor: Colors.pink.shade300,
+                      foregroundColor: Colors.white,
+                      mini: true,
+                      shape: const CircleBorder(),
+                      child: const Icon(Icons.perm_media),
+                    ),
+                  ),
+                // 文本按钮 - 向上展开
+                if (_isExpanded)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: FloatingActionButton(
+                      heroTag: 'text_fab',
+                      onPressed: _addText,
+                      backgroundColor: Colors.pink.shade400,
+                      foregroundColor: Colors.white,
+                      mini: true,
+                      shape: const CircleBorder(),
+                      child: const Icon(Icons.text_fields),
+                    ),
+                  ),
+                // 主按钮
+                FloatingActionButton(
+                  heroTag: 'main_fab',
+                  onPressed: _toggleExpanded,
+                  backgroundColor: Colors.pink,
+                  foregroundColor: Colors.white,
+                  shape: const CircleBorder(),
+                  child: Icon(_isExpanded ? Icons.close : Icons.add),
+                ),
+              ],
             ),
-          );
-          if (result == true) {
-            _loadEntries();
-          }
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('新建记录'),
-        backgroundColor: Colors.pink,
-        foregroundColor: Colors.white,
+          ),
+        ],
       ),
     );
   }
@@ -258,25 +395,29 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ],
-                    if (entry.imagePaths.isNotEmpty) ...[
+                    if (entry.imagePaths.isNotEmpty ||
+                        entry.videoPaths.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Icon(
-                            Icons.photo,
-                            size: 16,
-                            color: Colors.grey.shade600,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${entry.imagePaths.length} 张照片',
-                            style: TextStyle(
-                              fontSize: 12,
+                          if (entry.imagePaths.isNotEmpty) ...[
+                            Icon(
+                              Icons.photo,
+                              size: 16,
                               color: Colors.grey.shade600,
                             ),
-                          ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${entry.imagePaths.length} 张照片',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
                           if (entry.videoPaths.isNotEmpty) ...[
-                            const SizedBox(width: 12),
+                            if (entry.imagePaths.isNotEmpty)
+                              const SizedBox(width: 12),
                             Icon(
                               Icons.videocam,
                               size: 16,
