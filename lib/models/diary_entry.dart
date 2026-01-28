@@ -52,7 +52,19 @@ class DiaryEntry {
     );
   }
 
-  String getAgeLabel() {
-    return AgeCalculator.formatAgeLabel(ageInMonths);
+  String getAgeLabel(DateTime? birthDate) {
+    if (birthDate != null) {
+      return AgeCalculator.formatDetailedAgeLabel(birthDate, date);
+    } else {
+      return AgeCalculator.formatAgeLabel(ageInMonths);
+    }
+  }
+
+  String getSimplifiedAgeLabel(DateTime? birthDate) {
+    if (birthDate != null) {
+      return AgeCalculator.formatSimplifiedAgeLabel(birthDate, date);
+    } else {
+      return AgeCalculator.formatAgeLabel(ageInMonths);
+    }
   }
 }

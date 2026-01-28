@@ -117,24 +117,48 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _addMedia() async {
-    print('Add media button pressed');
+  Future<void> _addImage() async {
+    print('Add image button pressed');
     _toggleExpanded(); // 关闭菜单
     try {
-      final List<XFile> media = await _picker.pickMultipleMedia();
-      if (media.isEmpty) return;
+      final List<XFile> images = await _picker.pickMultiImage();
+      if (images.isEmpty) return;
 
       final String? description = await _showDescriptionDialog();
       if (description == null) return;
 
       setState(() => _isLoading = true);
 
-      await _entryService.createMediaEntry(media, description, widget.config);
+      await _entryService.createImageEntry(images, description, widget.config);
 
       _loadEntries();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('添加媒体记录失败: $e')),
+        SnackBar(content: Text('添加图片记录失败: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _addVideo() async {
+    print('Add video button pressed');
+    _toggleExpanded(); // 关闭菜单
+    try {
+      final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
+      if (video == null) return;
+
+      final String? description = await _showDescriptionDialog();
+      if (description == null) return;
+
+      setState(() => _isLoading = true);
+
+      await _entryService.createVideoEntry(video, description, widget.config);
+
+      _loadEntries();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('添加视频记录失败: $e')),
       );
     } finally {
       setState(() => _isLoading = false);
@@ -167,7 +191,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.config.childName}的成长日记'),
-        backgroundColor: Colors.pink.shade100,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -199,18 +225,32 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // 媒体按钮 - 向上展开
+                // 视频按钮 - 向上展开
                 if (_isExpanded)
                   Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: FloatingActionButton(
-                      heroTag: 'media_fab',
-                      onPressed: _addMedia,
+                      heroTag: 'video_fab',
+                      onPressed: _addVideo,
+                      backgroundColor: Colors.pink.shade200,
+                      foregroundColor: Colors.white,
+                      mini: true,
+                      shape: const CircleBorder(),
+                      child: const Icon(Icons.videocam),
+                    ),
+                  ),
+                // 图片按钮 - 向上展开
+                if (_isExpanded)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: FloatingActionButton(
+                      heroTag: 'image_fab',
+                      onPressed: _addImage,
                       backgroundColor: Colors.pink.shade300,
                       foregroundColor: Colors.white,
                       mini: true,
                       shape: const CircleBorder(),
-                      child: const Icon(Icons.perm_media),
+                      child: const Icon(Icons.photo),
                     ),
                   ),
                 // 文本按钮 - 向上展开
@@ -280,170 +320,334 @@ class _HomeScreenState extends State<HomeScreen> {
       onRefresh: _loadEntries,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _entries.length,
+        itemCount: _getTimelineItemCount(),
         itemBuilder: (context, index) {
-          final entry = _entries[index];
-          final isFirst = index == 0;
-          final isLast = index == _entries.length - 1;
-
-          return _buildTimelineItem(entry, isFirst, isLast);
+          return _buildTimelineItemAtIndex(index);
         },
       ),
     );
   }
 
-  Widget _buildTimelineItem(DiaryEntry entry, bool isFirst, bool isLast) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Timeline indicator
-        Column(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.pink.shade100,
-                border: Border.all(
-                  color: Colors.pink,
-                  width: 3,
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  '${entry.ageInMonths}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.pink,
+  int _getTimelineItemCount() {
+    if (_entries.isEmpty) return 0;
+
+    // Group entries by month
+    final monthGroups = <int, List<DiaryEntry>>{};
+    for (final entry in _entries) {
+      monthGroups.putIfAbsent(entry.ageInMonths, () => []).add(entry);
+    }
+
+    // Each month group has: 1 separator + N entries
+    int count = 0;
+    for (final entries in monthGroups.values) {
+      count += 1 + entries.length; // 1 separator + entries
+    }
+
+    return count;
+  }
+
+  Widget _buildTimelineItemAtIndex(int index) {
+    // Group entries by month
+    final monthGroups = <int, List<DiaryEntry>>{};
+    for (final entry in _entries) {
+      monthGroups.putIfAbsent(entry.ageInMonths, () => []).add(entry);
+    }
+
+    final sortedMonths = monthGroups.keys.toList()
+      ..sort((a, b) => b.compareTo(a)); // Newest first
+
+    int currentIndex = 0;
+    int monthIndex = 0;
+
+    for (final month in sortedMonths) {
+      final entries = monthGroups[month]!;
+      final isFirstMonth = monthIndex == 0;
+      final isLastMonth = monthIndex == sortedMonths.length - 1;
+
+      // Month separator
+      if (currentIndex == index) {
+        return _buildMonthSeparator(entries.first, isFirstMonth, isLastMonth);
+      }
+      currentIndex++;
+      monthIndex++;
+
+      // Month entries
+      for (final entry in entries) {
+        if (currentIndex == index) {
+          final entryIndex = _entries.indexOf(entry);
+          final isFirst = entryIndex == 0;
+          final isLast = entryIndex == _entries.length - 1;
+          final isFirstInMonth = entries.first == entry;
+          final isLastInMonth = entries.last == entry;
+
+          return _buildTimelineItem(
+              entry, isFirst, isLast, isFirstInMonth, isLastInMonth);
+        }
+        currentIndex++;
+      }
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildMonthSeparator(
+      DiaryEntry representativeEntry, bool isFirstMonth, bool isLastMonth) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 24),
+      child: Row(
+        children: [
+          // Timeline indicator for month
+          SizedBox(
+            width: 60,
+            child: Column(
+              children: [
+                // Top line (only if not first month)
+                if (!isFirstMonth)
+                  Container(
+                    width: 2,
+                    height: 24,
+                    color: Colors.pink.shade200,
                   ),
-                ),
-              ),
-            ),
-            if (!isLast)
-              Container(
-                width: 2,
-                height: 100, // 固定高度而不是 Expanded
-                color: Colors.pink.shade200,
-              ),
-          ],
-        ),
-        const SizedBox(width: 16),
-        // Content
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EntryDetailScreen(
-                    entry: entry,
-                    webdavService: widget.webdavService,
-                  ),
-                ),
-              ).then((_) => _loadEntries());
-            },
-            child: Card(
-              elevation: 2,
-              margin: const EdgeInsets.only(bottom: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          entry.getAgeLabel(),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.pink.shade700,
-                          ),
-                        ),
-                        Text(
-                          '${entry.date.year}-${entry.date.month.toString().padLeft(2, '0')}-${entry.date.day.toString().padLeft(2, '0')}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
+
+                // Month circle
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Colors.pink.shade300, Colors.pink.shade600],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      entry.title,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.pink.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${representativeEntry.ageInMonths}',
                       style: const TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
-                    if (entry.description.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        entry.description,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ],
-                    if (entry.imagePaths.isNotEmpty ||
-                        entry.videoPaths.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          if (entry.imagePaths.isNotEmpty) ...[
-                            Icon(
-                              Icons.photo,
-                              size: 16,
-                              color: Colors.grey.shade600,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${entry.imagePaths.length} 张照片',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                          if (entry.videoPaths.isNotEmpty) ...[
-                            if (entry.imagePaths.isNotEmpty)
-                              const SizedBox(width: 12),
-                            Icon(
-                              Icons.videocam,
-                              size: 16,
-                              color: Colors.grey.shade600,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${entry.videoPaths.length} 个视频',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      _buildThumbnailGrid(entry),
-                    ],
-                  ],
+                  ),
+                ),
+
+                // Bottom line (only if not last month)
+                if (!isLastMonth)
+                  Container(
+                    width: 2,
+                    height: 24,
+                    color: Colors.pink.shade200,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Month label
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.pink.shade50,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.pink.shade200,
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                representativeEntry
+                    .getSimplifiedAgeLabel(widget.config.childBirthDate),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.pink.shade700,
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineItem(DiaryEntry entry, bool isFirst, bool isLast,
+      bool isFirstInMonth, bool isLastInMonth) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Timeline indicator
+          SizedBox(
+            width: 60,
+            child: Column(
+              children: [
+                // Top line (only if not first in month)
+                if (!isFirstInMonth)
+                  Container(
+                    width: 2,
+                    height: 24,
+                    color: Colors.pink.shade200,
+                  ),
+
+                // Circle indicator
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(
+                      color: Colors.pink.shade300,
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.pink.withValues(alpha: 0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Bottom line
+                if (!isLastInMonth)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: Colors.pink.shade200,
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  )
+                else if (!isLast)
+                  Container(
+                    width: 2,
+                    height: 48, // Connect to next month separator
+                    color: Colors.pink.shade200,
+                    margin: const EdgeInsets.only(top: 8),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Content
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EntryDetailScreen(
+                      entry: entry,
+                      config: widget.config,
+                      webdavService: widget.webdavService,
+                    ),
+                  ),
+                ).then((_) => _loadEntries());
+              },
+              child: Card(
+                elevation: 1,
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Date
+                      Text(
+                        '${entry.date.year}-${entry.date.month.toString().padLeft(2, '0')}-${entry.date.day.toString().padLeft(2, '0')}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Title
+                      if (entry.title.isNotEmpty) ...[
+                        Text(
+                          entry.title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      // Description
+                      if (entry.description.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          entry.description,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                      // Media info
+                      if (entry.imagePaths.isNotEmpty ||
+                          entry.videoPaths.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            if (entry.imagePaths.isNotEmpty) ...[
+                              Icon(
+                                Icons.photo,
+                                size: 16,
+                                color: Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${entry.imagePaths.length} 张照片',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                            if (entry.videoPaths.isNotEmpty) ...[
+                              if (entry.imagePaths.isNotEmpty)
+                                const SizedBox(width: 12),
+                              Icon(
+                                Icons.videocam,
+                                size: 16,
+                                color: Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${entry.videoPaths.length} 个视频',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        _buildThumbnailGrid(entry),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

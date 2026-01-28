@@ -38,16 +38,8 @@ class EntryCreationService {
     return AgeCalculator.calculateAgeInMonths(birthDate, date);
   }
 
-  Future<DiaryEntry> createMediaEntry(
-      List<XFile> media, String description, AppConfig config) async {
-    // 分离图片和视频
-    final List<XFile> images = media
-        .where((file) => file.mimeType?.startsWith('image/') ?? false)
-        .toList();
-    final List<XFile> videos = media
-        .where((file) => file.mimeType?.startsWith('video/') ?? false)
-        .toList();
-
+  Future<DiaryEntry> createImageEntry(
+      List<XFile> images, String description, AppConfig config) async {
     // 确定记录日期
     DateTime date = DateTime.now();
     if (images.isNotEmpty) {
@@ -70,11 +62,6 @@ class EntryCreationService {
         final stat = await firstImage.stat();
         date = stat.changed;
       }
-    } else if (videos.isNotEmpty) {
-      // 使用第一个视频的文件修改日期
-      final firstVideo = File(videos.first.path);
-      final stat = await firstVideo.stat();
-      date = stat.changed;
     }
 
     // 上传图片
@@ -96,33 +83,8 @@ class EntryCreationService {
       }
     }
 
-    // 上传视频
-    final List<String> videoPaths = [];
-    final List<String> videoThumbnails = [];
-    for (var xfile in videos) {
-      final file = File(xfile.path);
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}';
-      final paths =
-          await webdavService.uploadVideoWithThumbnails(file, fileName);
-      final pathList = paths.split('|');
-      final uploadedPath = pathList[0];
-      final thumbnailPath = pathList.length >= 3 ? pathList[2] : paths;
-      videoPaths.add(uploadedPath);
-      videoThumbnails.add(thumbnailPath);
-    }
-
     // 生成标题
     String title = description;
-    if (title.isEmpty) {
-      if (images.isNotEmpty && videos.isNotEmpty) {
-        title = '图片和视频记录';
-      } else if (images.isNotEmpty) {
-        title = '图片记录';
-      } else if (videos.isNotEmpty) {
-        title = '视频记录';
-      }
-    }
 
     final entry = DiaryEntry(
       id: null,
@@ -130,9 +92,46 @@ class EntryCreationService {
       title: title,
       description: description,
       imagePaths: imagePaths,
-      videoPaths: videoPaths,
+      videoPaths: [],
       imageThumbnails: imageThumbnails,
-      videoThumbnails: videoThumbnails,
+      videoThumbnails: [],
+      ageInMonths: _calculateAgeInMonths(date, config),
+    );
+
+    await webdavService.saveDiaryEntry(entry);
+
+    return entry;
+  }
+
+  Future<DiaryEntry> createVideoEntry(
+      XFile video, String description, AppConfig config) async {
+    // 确定记录日期
+    DateTime date = DateTime.now();
+    final videoFile = File(video.path);
+    final stat = await videoFile.stat();
+    date = stat.changed;
+
+    // 上传视频
+    final fileName =
+        '${DateTime.now().millisecondsSinceEpoch}_${path.basename(videoFile.path)}';
+    final paths =
+        await webdavService.uploadVideoWithThumbnails(videoFile, fileName);
+    final pathList = paths.split('|');
+    final uploadedPath = pathList[0];
+    final thumbnailPath = pathList.length >= 3 ? pathList[2] : paths;
+
+    // 生成标题
+    String title = description;
+
+    final entry = DiaryEntry(
+      id: null,
+      date: date,
+      title: title,
+      description: description,
+      imagePaths: [],
+      videoPaths: [uploadedPath],
+      imageThumbnails: [],
+      videoThumbnails: [thumbnailPath],
       ageInMonths: _calculateAgeInMonths(date, config),
     );
 

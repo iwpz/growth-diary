@@ -82,7 +82,7 @@ class _SetupScreenState extends State<SetupScreen> {
       await _localStorage.saveConfig(config);
 
       if (!mounted) return;
-      
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (context) => HomeScreen(
@@ -93,7 +93,7 @@ class _SetupScreenState extends State<SetupScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('配置失败: $e')),
       );
@@ -111,7 +111,9 @@ class _SetupScreenState extends State<SetupScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('初始设置'),
-        backgroundColor: Colors.pink.shade100,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -180,7 +182,8 @@ class _SetupScreenState extends State<SetupScreen> {
                         ? '${_childBirthDate!.year}-${_childBirthDate!.month.toString().padLeft(2, '0')}-${_childBirthDate!.day.toString().padLeft(2, '0')}'
                         : '点击选择日期',
                     style: TextStyle(
-                      color: _childBirthDate != null ? Colors.black : Colors.grey,
+                      color:
+                          _childBirthDate != null ? Colors.black : Colors.grey,
                     ),
                   ),
                 ),

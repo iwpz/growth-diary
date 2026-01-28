@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import '../models/diary_entry.dart';
+import '../models/app_config.dart';
 import '../services/webdav_service.dart';
 
 class EntryDetailScreen extends StatefulWidget {
   final DiaryEntry entry;
+  final AppConfig config;
   final WebDAVService webdavService;
 
   const EntryDetailScreen({
     super.key,
     required this.entry,
+    required this.config,
     required this.webdavService,
   });
 
@@ -82,7 +85,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
     }
   }
 
-  void _showFullScreenImage(Uint8List imageData, int initialIndex) {
+  void _showFullScreenImage(int initialIndex) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => FullScreenImageView(
@@ -116,7 +119,9 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.entry.title),
-        backgroundColor: Colors.pink.shade100,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black,
         actions: [
           IconButton(
             icon: const Icon(Icons.delete),
@@ -176,7 +181,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.entry.getAgeLabel(),
+                        widget.entry.getAgeLabel(widget.config.childBirthDate),
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -246,7 +251,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${widget.entry.imagePaths.length} 张照片（存储在 WebDAV）',
+                '${widget.entry.imagePaths.length} 张照片',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -263,14 +268,12 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                 ),
                 itemCount: widget.entry.imagePaths.length,
                 itemBuilder: (context, index) {
-                  final path = widget.entry.imagePaths[index];
-                  final imageData = _imageCache[path];
-                  final isLoading = _loadingImages[path] ?? false;
+                  final thumbnailPath = widget.entry.imageThumbnails[index];
+                  final imageData = _imageCache[thumbnailPath];
+                  final isLoading = _loadingImages[thumbnailPath] ?? false;
 
                   return GestureDetector(
-                    onTap: imageData != null
-                        ? () => _showFullScreenImage(imageData, index)
-                        : null,
+                    onTap: () => _showFullScreenImage(index),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.grey.shade200,
