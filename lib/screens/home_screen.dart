@@ -5,6 +5,7 @@ import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
 import '../services/entry_creation_service.dart';
+import '../utils/age_calculator.dart';
 import 'entry_detail_screen.dart';
 import 'settings_screen.dart';
 
@@ -320,7 +321,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onRefresh: _loadEntries,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _getTimelineItemCount(),
+        itemCount: _getTimelineItemCount() + 1,
         itemBuilder: (context, index) {
           return _buildTimelineItemAtIndex(index);
         },
@@ -347,6 +348,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTimelineItemAtIndex(int index) {
+    if (index == 0) {
+      return _buildCurrentMonthSeparator();
+    }
+    index -= 1; // Adjust for the added current month separator
+
     // Group entries by month
     final monthGroups = <int, List<DiaryEntry>>{};
     for (final entry in _entries) {
@@ -392,90 +398,86 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildMonthSeparator(
       DiaryEntry representativeEntry, bool isFirstMonth, bool isLastMonth) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 24),
-      child: Row(
-        children: [
-          // Timeline indicator for month
-          SizedBox(
-            width: 60,
-            child: Column(
-              children: [
-                // Top line (only if not first month)
-                if (!isFirstMonth)
-                  Container(
-                    width: 2,
-                    height: 24,
-                    color: Colors.pink.shade200,
-                  ),
-
-                // Month circle
+    return Row(
+      children: [
+        // Timeline indicator for month
+        SizedBox(
+          width: 60,
+          child: Column(
+            children: [
+              // Top line (only if not first month)
+              if (!isFirstMonth)
                 Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [Colors.pink.shade300, Colors.pink.shade600],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.pink.withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${representativeEntry.ageInMonths}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                  width: 2,
+                  height: 24,
+                  color: Colors.pink.shade200,
                 ),
 
-                // Bottom line (only if not last month)
-                if (!isLastMonth)
-                  Container(
-                    width: 2,
-                    height: 24,
-                    color: Colors.pink.shade200,
+              // Month circle
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Colors.pink.shade300, Colors.pink.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Month label
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.pink.shade50,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.pink.shade200,
-                  width: 1,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.pink.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    '${representativeEntry.ageInMonths}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
-              child: Text(
-                representativeEntry
-                    .getSimplifiedAgeLabel(widget.config.childBirthDate),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.pink.shade700,
-                ),
+
+              // Bottom line (only if not last month)
+              Container(
+                width: 2,
+                height: 24,
+                color: Colors.pink.shade200,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        // Month label
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.pink.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.pink.shade200,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              representativeEntry
+                  .getSimplifiedAgeLabel(widget.config.childBirthDate),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.pink.shade700,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -491,12 +493,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               children: [
                 // Top line (only if not first in month)
-                if (!isFirstInMonth)
-                  Container(
-                    width: 2,
-                    height: 24,
-                    color: Colors.pink.shade200,
-                  ),
+                Container(
+                  width: 2,
+                  height: 24,
+                  color: Colors.pink.shade200,
+                ),
 
                 // Circle indicator
                 Container(
@@ -525,122 +526,124 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Container(
                       width: 2,
                       color: Colors.pink.shade200,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
                     ),
                   )
                 else if (!isLast)
-                  Container(
-                    width: 2,
-                    height: 48, // Connect to next month separator
-                    color: Colors.pink.shade200,
-                    margin: const EdgeInsets.only(top: 8),
-                  ),
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      height: 48, // Connect to next month separator
+                      color: Colors.pink.shade200,
+                    ),
+                  )
               ],
             ),
           ),
           const SizedBox(width: 16),
           // Content
           Expanded(
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EntryDetailScreen(
-                      entry: entry,
-                      config: widget.config,
-                      webdavService: widget.webdavService,
-                    ),
-                  ),
-                ).then((_) => _loadEntries());
-              },
-              child: Card(
-                elevation: 1,
-                margin: const EdgeInsets.only(bottom: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Date
-                      Text(
-                        '${entry.date.year}-${entry.date.month.toString().padLeft(2, '0')}-${entry.date.day.toString().padLeft(2, '0')}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EntryDetailScreen(
+                        entry: entry,
+                        config: widget.config,
+                        webdavService: widget.webdavService,
                       ),
-                      const SizedBox(height: 8),
-                      // Title
-                      if (entry.title.isNotEmpty) ...[
-                        Text(
-                          entry.title,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                    ),
+                  ).then((_) => _loadEntries());
+                },
+                child: Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Date
+                        // Title
+                        if (entry.title.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            entry.title,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
-                      // Description
-                      if (entry.description.isNotEmpty) ...[
-                        const SizedBox(height: 8),
+                        ],
+                        // Description
+                        if (entry.description.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            entry.description,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                        // Media info
+                        if (entry.imagePaths.isNotEmpty ||
+                            entry.videoPaths.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              if (entry.imagePaths.isNotEmpty) ...[
+                                Icon(
+                                  Icons.photo,
+                                  size: 16,
+                                  color: Colors.grey.shade600,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${entry.imagePaths.length} 张照片',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                              if (entry.videoPaths.isNotEmpty) ...[
+                                if (entry.imagePaths.isNotEmpty)
+                                  const SizedBox(width: 12),
+                                Icon(
+                                  Icons.videocam,
+                                  size: 16,
+                                  color: Colors.grey.shade600,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${entry.videoPaths.length} 个视频',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          _buildThumbnailGrid(entry),
+                        ],
                         Text(
-                          entry.description,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
+                          '${entry.date.year}-${entry.date.month.toString().padLeft(2, '0')}-${entry.date.day.toString().padLeft(2, '0')}',
                           style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade700,
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
                           ),
                         ),
                       ],
-                      // Media info
-                      if (entry.imagePaths.isNotEmpty ||
-                          entry.videoPaths.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            if (entry.imagePaths.isNotEmpty) ...[
-                              Icon(
-                                Icons.photo,
-                                size: 16,
-                                color: Colors.grey.shade600,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${entry.imagePaths.length} 张照片',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
-                            if (entry.videoPaths.isNotEmpty) ...[
-                              if (entry.imagePaths.isNotEmpty)
-                                const SizedBox(width: 12),
-                              Icon(
-                                Icons.videocam,
-                                size: 16,
-                                color: Colors.grey.shade600,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${entry.videoPaths.length} 个视频',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        _buildThumbnailGrid(entry),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -768,5 +771,90 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint('Error loading thumbnail $path: $e');
       return null;
     }
+  }
+
+  Widget _buildCurrentMonthSeparator() {
+    final currentDate = DateTime.now();
+    final birthDate = widget.config.childBirthDate;
+    if (birthDate == null) {
+      return const SizedBox.shrink(); // Or some default
+    }
+    final currentAgeInMonths =
+        AgeCalculator.calculateAgeInMonths(birthDate, currentDate);
+    final ageLabel =
+        AgeCalculator.formatDetailedAgeLabel(birthDate, currentDate);
+
+    return Row(
+      children: [
+        // Timeline indicator for current month
+        SizedBox(
+          width: 60,
+          child: Column(
+            children: [
+              // Month circle
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Colors.pink.shade300, Colors.pink.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.pink.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    '$currentAgeInMonths',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+
+              // Bottom line
+              Container(
+                width: 2,
+                height: 24,
+                color: Colors.pink.shade200,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        // Age label
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.pink.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.pink.shade200,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              ageLabel,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.pink.shade700,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
