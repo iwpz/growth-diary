@@ -101,4 +101,11 @@ class AgeCalculator {
       return '$years岁$months个月';
     }
   }
+
+  /// Calculates the number of weeks since conception date
+  static int calculateWeeksSinceConception(
+      DateTime conceptionDate, DateTime date) {
+    final difference = date.difference(conceptionDate);
+    return (difference.inDays / 7).floor();
+  }
 }

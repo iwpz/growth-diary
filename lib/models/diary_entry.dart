@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 import '../utils/age_calculator.dart';
+import 'app_config.dart';
 
 class DiaryEntry {
   final String id;
@@ -65,6 +66,16 @@ class DiaryEntry {
       return AgeCalculator.formatSimplifiedAgeLabel(birthDate, date);
     } else {
       return AgeCalculator.formatAgeLabel(ageInMonths);
+    }
+  }
+
+  int getGroupKey(AppConfig config) {
+    if (config.conceptionDate != null &&
+        date.isBefore(config.childBirthDate ?? DateTime.now())) {
+      return AgeCalculator.calculateWeeksSinceConception(
+          config.conceptionDate!, date);
+    } else {
+      return ageInMonths;
     }
   }
 }

@@ -138,14 +138,21 @@ class _HomeScreenState extends State<HomeScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('检测到文件日期可能有误，请选择正确的日期'),
+              const Text('检测到文件日期可能有误，请选择正确的日期'),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () async {
+                  // 计算 firstDate：优先使用 conceptionDate，否则使用 childBirthDate 减去 280 天，最后使用 2000 年
+                  final firstDate = config.conceptionDate ??
+                      (config.childBirthDate
+                          ?.subtract(const Duration(days: 280))) ??
+                      DateTime(2000);
                   final picked = await showDatePicker(
                     context: context,
-                    initialDate: selectedDate,
-                    firstDate: config.childBirthDate ?? DateTime(2000),
+                    initialDate: selectedDate.isBefore(firstDate)
+                        ? firstDate
+                        : selectedDate,
+                    firstDate: firstDate,
                     lastDate: DateTime.now(),
                   );
                   if (picked != null) {
@@ -164,6 +171,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('取消'),
+            ),
             TextButton(
               onPressed: selectedDate != initialDate
                   ? () => Navigator.of(context)
@@ -207,12 +218,18 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      // 检查日期是否小于宝宝生日前的280天
+      // 检查日期是否早于阈值日期（受孕日或出生前280天）
       String? description;
       DateTime? selectedDate;
-      if (config.childBirthDate != null &&
-          detectedDate.isBefore(
-              config.childBirthDate!.subtract(const Duration(days: 280)))) {
+      DateTime? thresholdDate;
+      if (config.conceptionDate != null) {
+        thresholdDate = config.conceptionDate;
+      } else if (config.childBirthDate != null) {
+        thresholdDate =
+            config.childBirthDate!.subtract(const Duration(days: 280));
+      }
+
+      if (thresholdDate != null && detectedDate.isBefore(thresholdDate)) {
         final result = await _showDateAndDescriptionDialog(detectedDate);
         if (result == null) return; // 用户取消
         selectedDate = result['date'] as DateTime;
@@ -264,12 +281,18 @@ class _HomeScreenState extends State<HomeScreen> {
       final stat = await videoFile.stat();
       detectedDate = stat.changed;
 
-      // 检查日期是否小于宝宝生日前的280天
+      // 检查日期是否早于阈值日期（受孕日或出生前280天）
       String? description;
       DateTime? selectedDate;
-      if (config.childBirthDate != null &&
-          detectedDate.isBefore(
-              config.childBirthDate!.subtract(const Duration(days: 280)))) {
+      DateTime? thresholdDate;
+      if (config.conceptionDate != null) {
+        thresholdDate = config.conceptionDate;
+      } else if (config.childBirthDate != null) {
+        thresholdDate =
+            config.childBirthDate!.subtract(const Duration(days: 280));
+      }
+
+      if (thresholdDate != null && detectedDate.isBefore(thresholdDate)) {
         final result = await _showDateAndDescriptionDialog(detectedDate);
         if (result == null) return; // 用户取消
         selectedDate = result['date'] as DateTime;
@@ -509,24 +532,35 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMonthSeparator(
-      DiaryEntry representativeEntry, bool isFirstMonth, bool isLastMonth) {
+  Widget _buildGroupSeparator(DiaryEntry representativeEntry, bool isFirstGroup,
+      bool isLastGroup, bool isPregnancyPeriod, AppConfig config) {
+    final groupValue = representativeEntry.getGroupKey(config);
+    final displayValue = isPregnancyPeriod
+        ? groupValue
+        : (groupValue < 0 ? -groupValue : groupValue);
+    final displayText = isPregnancyPeriod
+        ? '$displayValue'
+        : (groupValue < 0 ? '前$displayValue' : '$displayValue');
+    final labelText = isPregnancyPeriod
+        ? '孕期 $displayValue 周'
+        : representativeEntry.getSimplifiedAgeLabel(config.childBirthDate);
+
     return Row(
       children: [
-        // Timeline indicator for month
+        // Timeline indicator for group
         SizedBox(
           width: 60,
           child: Column(
             children: [
-              // Top line (only if not first month)
-              if (!isFirstMonth)
+              // Top line (only if not first group)
+              if (!isFirstGroup)
                 Container(
                   width: 2,
                   height: 24,
                   color: Colors.pink.shade200,
                 ),
 
-              // Month circle
+              // Group circle
               Container(
                 width: 60,
                 height: 60,
@@ -547,9 +581,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    representativeEntry.ageInMonths < 0
-                        ? '前${-representativeEntry.ageInMonths}'
-                        : '${representativeEntry.ageInMonths}',
+                    displayText,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -559,7 +591,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              // Bottom line (only if not last month)
+              // Bottom line (only if not last group)
               Container(
                 width: 2,
                 height: 24,
@@ -569,7 +601,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const SizedBox(width: 16),
-        // Month label
+        // Group label
         Expanded(
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -582,7 +614,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             child: Text(
-              representativeEntry.getSimplifiedAgeLabel(config.childBirthDate),
+              labelText,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -596,7 +628,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTimelineItem(DiaryEntry entry, bool isFirst, bool isLast,
-      bool isFirstInMonth, bool isLastInMonth) {
+      bool isFirstInGroup, bool isLastInGroup) {
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -635,7 +667,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
 
                 // Bottom line
-                if (!isLastInMonth)
+                if (!isLastInGroup)
                   Expanded(
                     child: Container(
                       width: 2,
@@ -1047,36 +1079,38 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  int _getItemCountForEntries(
-      List<DiaryEntry> entries, bool skipCurrentMonthSeparator) {
+  int _getItemCountForEntries(List<DiaryEntry> entries,
+      bool skipCurrentMonthSeparator, AppConfig config) {
     if (entries.isEmpty) return 0;
 
-    final monthGroups = <int, List<DiaryEntry>>{};
+    final groupGroups = <int, List<DiaryEntry>>{};
     for (final entry in entries) {
-      monthGroups.putIfAbsent(entry.ageInMonths, () => []).add(entry);
+      final groupKey = entry.getGroupKey(config);
+      groupGroups.putIfAbsent(groupKey, () => []).add(entry);
     }
 
-    final sortedMonths = monthGroups.keys.toList()
+    final sortedGroups = groupGroups.keys.toList()
       ..sort((a, b) => b.compareTo(a));
 
     final currentDate = DateTime.now();
     final birthDate = config.childBirthDate;
-    final currentMonth = birthDate != null
-        ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
-        : null;
+    final currentGroup =
+        birthDate != null && !entries.any((e) => e.date.isBefore(birthDate))
+            ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
+            : null;
 
     int count = 0;
-    int monthIndex = 0;
-    for (final month in sortedMonths) {
-      final entriesInMonth = monthGroups[month]!;
-      final isFirstMonth = monthIndex == 0;
+    int groupIndex = 0;
+    for (final group in sortedGroups) {
+      final entriesInGroup = groupGroups[group]!;
+      final isFirstGroup = groupIndex == 0;
       final skipSeparator =
-          skipCurrentMonthSeparator && isFirstMonth && month == currentMonth;
+          skipCurrentMonthSeparator && isFirstGroup && group == currentGroup;
       if (!skipSeparator) {
         count += 1; // separator
       }
-      count += entriesInMonth.length;
-      monthIndex++;
+      count += entriesInGroup.length;
+      groupIndex++;
     }
 
     return count;
@@ -1087,7 +1121,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (birthDate == null) return 0;
     final preBirthEntries =
         _entries.where((e) => e.date.isBefore(birthDate)).toList();
-    return _getItemCountForEntries(preBirthEntries, false);
+    return _getItemCountForEntries(preBirthEntries, false, config);
   }
 
   int _getPostBirthItemCount() {
@@ -1095,55 +1129,59 @@ class _HomeScreenState extends State<HomeScreen> {
     final postBirthEntries = _entries
         .where((e) => birthDate == null || !e.date.isBefore(birthDate))
         .toList();
-    return _getItemCountForEntries(postBirthEntries, true);
+    return _getItemCountForEntries(postBirthEntries, true, config);
   }
 
-  Widget _buildItemAtIndexForEntries(
-      List<DiaryEntry> entries, int index, bool skipCurrentMonthSeparator) {
-    final monthGroups = <int, List<DiaryEntry>>{};
+  Widget _buildItemAtIndexForEntries(List<DiaryEntry> entries, int index,
+      bool skipCurrentMonthSeparator, AppConfig config) {
+    final groupGroups = <int, List<DiaryEntry>>{};
     for (final entry in entries) {
-      monthGroups.putIfAbsent(entry.ageInMonths, () => []).add(entry);
+      final groupKey = entry.getGroupKey(config);
+      groupGroups.putIfAbsent(groupKey, () => []).add(entry);
     }
 
-    final sortedMonths = monthGroups.keys.toList()
+    final sortedGroups = groupGroups.keys.toList()
       ..sort((a, b) => b.compareTo(a));
 
     final currentDate = DateTime.now();
     final birthDate = config.childBirthDate;
-    final currentMonth = birthDate != null
-        ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
-        : null;
+    final currentGroup =
+        birthDate != null && !entries.any((e) => e.date.isBefore(birthDate))
+            ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
+            : null;
 
     int currentIndex = 0;
-    int monthIndex = 0;
+    int groupIndex = 0;
 
-    for (final month in sortedMonths) {
-      final entriesInMonth = monthGroups[month]!;
-      final isFirstMonth = monthIndex == 0;
-      final isLastMonth = monthIndex == sortedMonths.length - 1;
+    for (final group in sortedGroups) {
+      final entriesInGroup = groupGroups[group]!;
+      final isFirstGroup = groupIndex == 0;
+      final isLastGroup = groupIndex == sortedGroups.length - 1;
       final skipSeparator =
-          skipCurrentMonthSeparator && isFirstMonth && month == currentMonth;
+          skipCurrentMonthSeparator && isFirstGroup && group == currentGroup;
 
       if (!skipSeparator) {
         if (currentIndex == index) {
-          return _buildMonthSeparator(
-              entriesInMonth.first, isFirstMonth, isLastMonth);
+          final isPregnancyPeriod = config.conceptionDate != null &&
+              entriesInGroup.first.date.isBefore(birthDate ?? DateTime.now());
+          return _buildGroupSeparator(entriesInGroup.first, isFirstGroup,
+              isLastGroup, isPregnancyPeriod, config);
         }
         currentIndex++;
       }
-      monthIndex++;
+      groupIndex++;
 
-      for (final entry in entriesInMonth) {
+      for (final entry in entriesInGroup) {
         if (currentIndex == index) {
           final entryIndex = entries.indexOf(entry);
           final isFirst = entryIndex == 0;
           final isLast = entryIndex == entries.length - 1 &&
               entry.date.isBefore(birthDate ?? DateTime.now());
-          final isFirstInMonth = entriesInMonth.first == entry;
-          final isLastInMonth = entriesInMonth.last == entry;
+          final isFirstInGroup = entriesInGroup.first == entry;
+          final isLastInGroup = entriesInGroup.last == entry;
 
           return _buildTimelineItem(
-              entry, isFirst, isLast, isFirstInMonth, isLastInMonth);
+              entry, isFirst, isLast, isFirstInGroup, isLastInGroup);
         }
         currentIndex++;
       }
@@ -1158,7 +1196,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .where((e) => e.date.isBefore(birthDate))
         .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
-    return _buildItemAtIndexForEntries(preBirthEntries, index, false);
+    return _buildItemAtIndexForEntries(preBirthEntries, index, false, config);
   }
 
   Widget _buildPostBirthItemAtIndex(int index) {
@@ -1167,6 +1205,6 @@ class _HomeScreenState extends State<HomeScreen> {
         .where((e) => birthDate == null || !e.date.isBefore(birthDate))
         .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
-    return _buildItemAtIndexForEntries(postBirthEntries, index, true);
+    return _buildItemAtIndexForEntries(postBirthEntries, index, true, config);
   }
 }
