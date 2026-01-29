@@ -135,8 +135,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       client.setSendTimeout(5000);
       client.setReceiveTimeout(5000);
 
-      // 尝试列出根目录来测试连接
-      await client.read('/');
+      // 尝试 ping 服务器来测试连接
+      await client.ping();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -146,8 +146,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('连接失败: $e')),
+          const SnackBar(content: Text('连接失败！请检查配置')),
         );
+        print('WebDAV connection test failed: $e');
       }
     }
   }
