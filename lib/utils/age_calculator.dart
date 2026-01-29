@@ -6,10 +6,7 @@ class AgeCalculator {
   /// Calculates the age in months from birth date to the given date
   static int calculateAgeInMonths(DateTime birthDate, DateTime currentDate) {
     final diff = currentDate.difference(birthDate);
-    return (diff.inDays / averageDaysPerMonth)
-        .floor()
-        .clamp(0, double.infinity)
-        .toInt();
+    return (diff.inDays / averageDaysPerMonth).floor().toInt();
   }
 
   /// Calculates the detailed age (years, months, days) from birth date to the given date
@@ -88,6 +85,10 @@ class AgeCalculator {
   /// Formats age to a simplified Chinese label (years and months only, no days)
   static String formatSimplifiedAgeLabel(
       DateTime birthDate, DateTime currentDate) {
+    int ageInMonths = calculateAgeInMonths(birthDate, currentDate);
+    if (ageInMonths < 0) {
+      return '出生前 ${-ageInMonths} 月';
+    }
     final age = calculateDetailedAge(birthDate, currentDate);
     final years = age['years']!;
     final months = age['months']!;

@@ -66,10 +66,12 @@ class EntryCreationService {
 
   Future<DiaryEntry> createImageEntry(
       List<XFile> images, String description, AppConfig config,
-      [UploadProgressCallback? onProgress]) async {
+      [UploadProgressCallback? onProgress, DateTime? overrideDate]) async {
     // 确定记录日期
     DateTime date = DateTime.now();
-    if (images.isNotEmpty) {
+    if (overrideDate != null) {
+      date = overrideDate;
+    } else if (images.isNotEmpty) {
       // 使用第一张图片的EXIF拍摄日期或创建日期作为记录日期
       final firstImage = File(images.first.path);
       try {
@@ -134,12 +136,16 @@ class EntryCreationService {
 
   Future<DiaryEntry> createVideoEntry(
       XFile video, String description, AppConfig config,
-      [UploadProgressCallback? onProgress]) async {
+      [UploadProgressCallback? onProgress, DateTime? overrideDate]) async {
     // 确定记录日期
     DateTime date = DateTime.now();
     final videoFile = File(video.path);
     final stat = await videoFile.stat();
-    date = stat.changed;
+    if (overrideDate != null) {
+      date = overrideDate;
+    } else {
+      date = stat.changed;
+    }
 
     // 上传视频
     final fileName = _generateFileName(videoFile, stat);

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:exif/exif.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
@@ -11,10 +13,10 @@ import 'settings_screen.dart';
 import 'diary_editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final AppConfig config;
+  AppConfig config;
   final WebDAVService webdavService;
 
-  const HomeScreen({
+  HomeScreen({
     super.key,
     required this.config,
     required this.webdavService,
@@ -37,9 +39,33 @@ class _HomeScreenState extends State<HomeScreen> {
   int _uploadedFiles = 0;
   String _uploadMessage = '';
 
+  late AppConfig config;
+
+  DateTime _parseExifDate(String exifDate) {
+    // EXIF日期格式: "YYYY:MM:DD HH:MM:SS"
+    final parts = exifDate.split(' ');
+    if (parts.length == 2) {
+      final dateParts = parts[0].split(':');
+      final timeParts = parts[1].split(':');
+      if (dateParts.length == 3 && timeParts.length == 3) {
+        return DateTime(
+          int.parse(dateParts[0]),
+          int.parse(dateParts[1]),
+          int.parse(dateParts[2]),
+          int.parse(timeParts[0]),
+          int.parse(timeParts[1]),
+          int.parse(timeParts[2]),
+        );
+      }
+    }
+    // 如果解析失败，返回当前时间
+    return DateTime.now();
+  }
+
   @override
   void initState() {
     super.initState();
+    config = widget.config;
     _entryService = EntryCreationService(widget.webdavService);
     _loadEntries();
   }
@@ -98,6 +124,59 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<Map<String, dynamic>?> _showDateAndDescriptionDialog(
+      DateTime initialDate) async {
+    DateTime selectedDate = initialDate;
+    String description = '';
+
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false, // 必须选择日期，不能取消
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('选择日期并添加描述'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('检测到文件日期可能有误，请选择正确的日期'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: config.childBirthDate ?? DateTime(2000),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) {
+                    setState(() => selectedDate = picked);
+                  }
+                },
+                child: Text(
+                    '选择日期: ${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                onChanged: (value) => description = value,
+                decoration: const InputDecoration(hintText: '请输入描述（可选）'),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: selectedDate != initialDate
+                  ? () => Navigator.of(context)
+                      .pop({'date': selectedDate, 'description': description})
+                  : null,
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _addImage() async {
     print('Add image button pressed');
     _toggleExpanded(); // 关闭菜单
@@ -105,8 +184,43 @@ class _HomeScreenState extends State<HomeScreen> {
       final List<XFile> images = await _picker.pickMultiImage();
       if (images.isEmpty) return;
 
-      final String? description = await _showDescriptionDialog();
-      if (description == null) return;
+      // 获取第一张图片的日期
+      DateTime detectedDate = DateTime.now();
+      if (images.isNotEmpty) {
+        final firstImage = File(images.first.path);
+        try {
+          final exifData =
+              await readExifFromBytes(await firstImage.readAsBytes());
+          final dateTimeOriginal = exifData['EXIF DateTimeOriginal'];
+          final imageDateTime = exifData['Image DateTime'];
+          if (dateTimeOriginal != null) {
+            detectedDate = _parseExifDate(dateTimeOriginal.toString());
+          } else if (imageDateTime != null) {
+            detectedDate = _parseExifDate(imageDateTime.toString());
+          } else {
+            final stat = await firstImage.stat();
+            detectedDate = stat.changed;
+          }
+        } catch (e) {
+          final stat = await firstImage.stat();
+          detectedDate = stat.changed;
+        }
+      }
+
+      // 检查日期是否小于宝宝生日前的280天
+      String? description;
+      DateTime? selectedDate;
+      if (config.childBirthDate != null &&
+          detectedDate.isBefore(
+              config.childBirthDate!.subtract(const Duration(days: 280)))) {
+        final result = await _showDateAndDescriptionDialog(detectedDate);
+        if (result == null) return; // 用户取消
+        selectedDate = result['date'] as DateTime;
+        description = result['description'] as String;
+      } else {
+        description = await _showDescriptionDialog();
+        if (description == null) return;
+      }
 
       setState(() {
         _isUploading = true;
@@ -115,12 +229,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _uploadMessage = '正在上传图片...';
       });
 
-      await _entryService.createImageEntry(images, description, widget.config,
+      await _entryService.createImageEntry(images, description, config,
           (uploaded, total) {
         setState(() {
           _uploadedFiles = uploaded;
         });
-      });
+      }, selectedDate);
 
       setState(() {
         _isUploading = false;
@@ -144,8 +258,26 @@ class _HomeScreenState extends State<HomeScreen> {
       final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
       if (video == null) return;
 
-      final String? description = await _showDescriptionDialog();
-      if (description == null) return;
+      // 获取视频的日期
+      DateTime detectedDate = DateTime.now();
+      final videoFile = File(video.path);
+      final stat = await videoFile.stat();
+      detectedDate = stat.changed;
+
+      // 检查日期是否小于宝宝生日前的280天
+      String? description;
+      DateTime? selectedDate;
+      if (config.childBirthDate != null &&
+          detectedDate.isBefore(
+              config.childBirthDate!.subtract(const Duration(days: 280)))) {
+        final result = await _showDateAndDescriptionDialog(detectedDate);
+        if (result == null) return; // 用户取消
+        selectedDate = result['date'] as DateTime;
+        description = result['description'] as String;
+      } else {
+        description = await _showDescriptionDialog();
+        if (description == null) return;
+      }
 
       setState(() {
         _isUploading = true;
@@ -154,12 +286,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _uploadMessage = '正在上传视频...';
       });
 
-      await _entryService.createVideoEntry(video, description, widget.config,
+      await _entryService.createVideoEntry(video, description, config,
           (uploaded, total) {
         setState(() {
           _uploadedFiles = uploaded;
         });
-      });
+      }, selectedDate);
 
       setState(() {
         _isUploading = false;
@@ -183,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => DiaryEditorScreen(
-          config: widget.config,
+          config: config,
           webdavService: widget.webdavService,
         ),
       ),
@@ -194,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.config.childName}的成长日记'),
+        title: Text('${config.childName}的成长日记'),
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.black,
@@ -206,8 +338,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => SettingsScreen(
-                    config: widget.config,
+                    config: config,
                     webdavService: widget.webdavService,
+                    onConfigChanged: (newConfig) {
+                      setState(() {
+                        config = newConfig;
+                      });
+                    },
                   ),
                 ),
               );
@@ -341,113 +478,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTimeline() {
+    int preBirthItemCount = _getPreBirthItemCount();
+    bool hasPreBirth = preBirthItemCount > 0;
+    int postBirthItemCount = _getPostBirthItemCount();
+
     return RefreshIndicator(
       onRefresh: _loadEntries,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _getTimelineItemCount() + 1,
+        itemCount: 1 +
+            postBirthItemCount +
+            1 +
+            preBirthItemCount, // current month + post + birth label + pre
         itemBuilder: (context, index) {
-          return _buildTimelineItemAtIndex(index);
+          if (index == 0) return _buildCurrentMonthSeparator();
+          index -= 1;
+
+          if (index < postBirthItemCount) {
+            return _buildPostBirthItemAtIndex(index);
+          }
+          index -= postBirthItemCount;
+
+          if (index == 0)
+            return _buildBirthDateLabel(showBottomLine: hasPreBirth);
+          index -= 1;
+
+          return _buildPreBirthItemAtIndex(index);
         },
       ),
     );
-  }
-
-  int _getTimelineItemCount() {
-    if (_entries.isEmpty) return 0;
-
-    // Group entries by month
-    final monthGroups = <int, List<DiaryEntry>>{};
-    for (final entry in _entries) {
-      monthGroups.putIfAbsent(entry.ageInMonths, () => []).add(entry);
-    }
-
-    final sortedMonths = monthGroups.keys.toList()
-      ..sort((a, b) => b.compareTo(a)); // Newest first
-
-    // Calculate current month
-    final currentDate = DateTime.now();
-    final birthDate = widget.config.childBirthDate;
-    final currentMonth = birthDate != null
-        ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
-        : null;
-
-    // Each month group has: 1 separator + N entries, but skip separator for latest month if same as current
-    int count = 0;
-    int monthIndex = 0;
-    for (final month in sortedMonths) {
-      final entries = monthGroups[month]!;
-      final isFirstMonth = monthIndex == 0;
-      final skipSeparator = isFirstMonth && month == currentMonth;
-      if (!skipSeparator) {
-        count += 1; // separator
-      }
-      count += entries.length; // entries
-      monthIndex++;
-    }
-
-    return count;
-  }
-
-  Widget _buildTimelineItemAtIndex(int index) {
-    if (index == 0) {
-      return _buildCurrentMonthSeparator();
-    }
-    index -= 1; // Adjust for the added current month separator
-
-    // Group entries by month
-    final monthGroups = <int, List<DiaryEntry>>{};
-    for (final entry in _entries) {
-      monthGroups.putIfAbsent(entry.ageInMonths, () => []).add(entry);
-    }
-
-    final sortedMonths = monthGroups.keys.toList()
-      ..sort((a, b) => b.compareTo(a)); // Newest first
-
-    // Calculate current month
-    final currentDate = DateTime.now();
-    final birthDate = widget.config.childBirthDate;
-    final currentMonth = birthDate != null
-        ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
-        : null;
-
-    int currentIndex = 0;
-    int monthIndex = 0;
-
-    for (final month in sortedMonths) {
-      final entries = monthGroups[month]!;
-      final isFirstMonth = monthIndex == 0;
-      final isLastMonth = monthIndex == sortedMonths.length - 1;
-
-      // Skip month separator if it's the latest month and same as current month
-      final skipSeparator = isFirstMonth && month == currentMonth;
-
-      if (!skipSeparator) {
-        // Month separator
-        if (currentIndex == index) {
-          return _buildMonthSeparator(entries.first, isFirstMonth, isLastMonth);
-        }
-        currentIndex++;
-      }
-      monthIndex++;
-
-      // Month entries
-      for (final entry in entries) {
-        if (currentIndex == index) {
-          final entryIndex = _entries.indexOf(entry);
-          final isFirst = entryIndex == 0;
-          final isLast = entryIndex == _entries.length - 1;
-          final isFirstInMonth = entries.first == entry;
-          final isLastInMonth = entries.last == entry;
-
-          return _buildTimelineItem(
-              entry, isFirst, isLast, isFirstInMonth, isLastInMonth);
-        }
-        currentIndex++;
-      }
-    }
-
-    return const SizedBox.shrink();
   }
 
   Widget _buildMonthSeparator(
@@ -488,7 +547,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    '${representativeEntry.ageInMonths}',
+                    representativeEntry.ageInMonths < 0
+                        ? '前${-representativeEntry.ageInMonths}'
+                        : '${representativeEntry.ageInMonths}',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -521,8 +582,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             child: Text(
-              representativeEntry
-                  .getSimplifiedAgeLabel(widget.config.childBirthDate),
+              representativeEntry.getSimplifiedAgeLabel(config.childBirthDate),
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -605,7 +665,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     MaterialPageRoute(
                       builder: (context) => EntryDetailScreen(
                         entry: entry,
-                        config: widget.config,
+                        config: config,
                         webdavService: widget.webdavService,
                       ),
                     ),
@@ -827,9 +887,84 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Widget _buildBirthDateLabel({bool showBottomLine = true}) {
+    final birthDate = config.childBirthDate;
+    if (birthDate == null) return const SizedBox.shrink();
+
+    return Row(
+      children: [
+        // Timeline indicator for birth date
+        SizedBox(
+          width: 60,
+          child: Column(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Colors.blue.shade300, Colors.blue.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.child_care,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+              ),
+
+              // Bottom line (only if showBottomLine)
+              if (showBottomLine)
+                Container(
+                  width: 2,
+                  height: 24,
+                  color: Colors.blue.shade200,
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        // Birth date label
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.blue.shade200,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              '出生日期: ${birthDate.year}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue.shade700,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCurrentMonthSeparator() {
     final currentDate = DateTime.now();
-    final birthDate = widget.config.childBirthDate;
+    final birthDate = config.childBirthDate;
     if (birthDate == null) {
       return const SizedBox.shrink(); // Or some default
     }
@@ -910,5 +1045,128 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
     );
+  }
+
+  int _getItemCountForEntries(
+      List<DiaryEntry> entries, bool skipCurrentMonthSeparator) {
+    if (entries.isEmpty) return 0;
+
+    final monthGroups = <int, List<DiaryEntry>>{};
+    for (final entry in entries) {
+      monthGroups.putIfAbsent(entry.ageInMonths, () => []).add(entry);
+    }
+
+    final sortedMonths = monthGroups.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    final currentDate = DateTime.now();
+    final birthDate = config.childBirthDate;
+    final currentMonth = birthDate != null
+        ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
+        : null;
+
+    int count = 0;
+    int monthIndex = 0;
+    for (final month in sortedMonths) {
+      final entriesInMonth = monthGroups[month]!;
+      final isFirstMonth = monthIndex == 0;
+      final skipSeparator =
+          skipCurrentMonthSeparator && isFirstMonth && month == currentMonth;
+      if (!skipSeparator) {
+        count += 1; // separator
+      }
+      count += entriesInMonth.length;
+      monthIndex++;
+    }
+
+    return count;
+  }
+
+  int _getPreBirthItemCount() {
+    final birthDate = config.childBirthDate;
+    if (birthDate == null) return 0;
+    final preBirthEntries =
+        _entries.where((e) => e.date.isBefore(birthDate)).toList();
+    return _getItemCountForEntries(preBirthEntries, false);
+  }
+
+  int _getPostBirthItemCount() {
+    final birthDate = config.childBirthDate;
+    final postBirthEntries = _entries
+        .where((e) => birthDate == null || !e.date.isBefore(birthDate))
+        .toList();
+    return _getItemCountForEntries(postBirthEntries, true);
+  }
+
+  Widget _buildItemAtIndexForEntries(
+      List<DiaryEntry> entries, int index, bool skipCurrentMonthSeparator) {
+    final monthGroups = <int, List<DiaryEntry>>{};
+    for (final entry in entries) {
+      monthGroups.putIfAbsent(entry.ageInMonths, () => []).add(entry);
+    }
+
+    final sortedMonths = monthGroups.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    final currentDate = DateTime.now();
+    final birthDate = config.childBirthDate;
+    final currentMonth = birthDate != null
+        ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
+        : null;
+
+    int currentIndex = 0;
+    int monthIndex = 0;
+
+    for (final month in sortedMonths) {
+      final entriesInMonth = monthGroups[month]!;
+      final isFirstMonth = monthIndex == 0;
+      final isLastMonth = monthIndex == sortedMonths.length - 1;
+      final skipSeparator =
+          skipCurrentMonthSeparator && isFirstMonth && month == currentMonth;
+
+      if (!skipSeparator) {
+        if (currentIndex == index) {
+          return _buildMonthSeparator(
+              entriesInMonth.first, isFirstMonth, isLastMonth);
+        }
+        currentIndex++;
+      }
+      monthIndex++;
+
+      for (final entry in entriesInMonth) {
+        if (currentIndex == index) {
+          final entryIndex = entries.indexOf(entry);
+          final isFirst = entryIndex == 0;
+          final isLast = entryIndex == entries.length - 1 &&
+              entry.date.isBefore(birthDate ?? DateTime.now());
+          final isFirstInMonth = entriesInMonth.first == entry;
+          final isLastInMonth = entriesInMonth.last == entry;
+
+          return _buildTimelineItem(
+              entry, isFirst, isLast, isFirstInMonth, isLastInMonth);
+        }
+        currentIndex++;
+      }
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildPreBirthItemAtIndex(int index) {
+    final birthDate = config.childBirthDate!;
+    final preBirthEntries = _entries
+        .where((e) => e.date.isBefore(birthDate))
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return _buildItemAtIndexForEntries(preBirthEntries, index, false);
+  }
+
+  Widget _buildPostBirthItemAtIndex(int index) {
+    final birthDate = config.childBirthDate;
+    final postBirthEntries = _entries
+        .where((e) => birthDate == null || !e.date.isBefore(birthDate))
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return _buildItemAtIndexForEntries(postBirthEntries, index, true);
   }
 }
