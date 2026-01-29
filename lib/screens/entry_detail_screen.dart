@@ -206,23 +206,25 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              '标题',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
+            if (widget.entry.title.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              const Text(
+                '标题',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.entry.title,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+              const SizedBox(height: 8),
+              Text(
+                widget.entry.title,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+            ],
             if (widget.entry.description.isNotEmpty) ...[
               const SizedBox(height: 20),
               const Text(

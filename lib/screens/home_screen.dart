@@ -8,6 +8,7 @@ import '../services/entry_creation_service.dart';
 import '../utils/age_calculator.dart';
 import 'entry_detail_screen.dart';
 import 'settings_screen.dart';
+import 'diary_editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final AppConfig config;
@@ -31,6 +32,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isExpanded = false;
   final ImagePicker _picker = ImagePicker();
   late final EntryCreationService _entryService;
+  bool _isUploading = false;
+  int _totalFiles = 0;
+  int _uploadedFiles = 0;
+  String _uploadMessage = '';
 
   @override
   void initState() {
@@ -93,31 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<String?> _showTextDialog() async {
-    String text = '';
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('输入文本记录'),
-        content: TextField(
-          onChanged: (value) => text = value,
-          decoration: const InputDecoration(hintText: '请输入文本'),
-          maxLines: 5,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(text),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _addImage() async {
     print('Add image button pressed');
     _toggleExpanded(); // 关闭菜单
@@ -128,17 +108,32 @@ class _HomeScreenState extends State<HomeScreen> {
       final String? description = await _showDescriptionDialog();
       if (description == null) return;
 
-      setState(() => _isLoading = true);
+      setState(() {
+        _isUploading = true;
+        _totalFiles = images.length;
+        _uploadedFiles = 0;
+        _uploadMessage = '正在上传图片...';
+      });
 
-      await _entryService.createImageEntry(images, description, widget.config);
+      await _entryService.createImageEntry(images, description, widget.config,
+          (uploaded, total) {
+        setState(() {
+          _uploadedFiles = uploaded;
+        });
+      });
+
+      setState(() {
+        _isUploading = false;
+      });
 
       _loadEntries();
     } catch (e) {
+      setState(() {
+        _isUploading = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('添加图片记录失败: $e')),
       );
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -152,39 +147,47 @@ class _HomeScreenState extends State<HomeScreen> {
       final String? description = await _showDescriptionDialog();
       if (description == null) return;
 
-      setState(() => _isLoading = true);
+      setState(() {
+        _isUploading = true;
+        _totalFiles = 1;
+        _uploadedFiles = 0;
+        _uploadMessage = '正在上传视频...';
+      });
 
-      await _entryService.createVideoEntry(video, description, widget.config);
+      await _entryService.createVideoEntry(video, description, widget.config,
+          (uploaded, total) {
+        setState(() {
+          _uploadedFiles = uploaded;
+        });
+      });
+
+      setState(() {
+        _isUploading = false;
+      });
 
       _loadEntries();
     } catch (e) {
+      setState(() {
+        _isUploading = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('添加视频记录失败: $e')),
       );
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _addText() async {
-    print('Add text button pressed');
+  Future<void> _addDiary() async {
+    print('Add diary button pressed');
     _toggleExpanded(); // 关闭菜单
-    try {
-      final String? text = await _showTextDialog();
-      if (text == null || text.isEmpty) return;
-
-      setState(() => _isLoading = true);
-
-      await _entryService.createTextEntry(text, widget.config);
-
-      _loadEntries();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('添加文本记录失败: $e')),
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DiaryEditorScreen(
+          config: widget.config,
+          webdavService: widget.webdavService,
+        ),
+      ),
+    ).then((_) => _loadEntries());
   }
 
   @override
@@ -214,11 +217,32 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Stack(
         children: [
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _entries.isEmpty
-                  ? _buildEmptyState()
-                  : _buildTimeline(),
+          if (_isUploading)
+            Container(
+              color: Colors.black.withValues(alpha: 0.5),
+              child: Center(
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        Text(_uploadMessage),
+                        Text('$_uploadedFiles / $_totalFiles'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else if (_isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (_entries.isEmpty)
+            _buildEmptyState()
+          else
+            _buildTimeline(),
           Positioned(
             bottom: 16.0,
             right: 16.0,
@@ -254,18 +278,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: const Icon(Icons.photo),
                     ),
                   ),
-                // 文本按钮 - 向上展开
+                // 日记按钮 - 向上展开
                 if (_isExpanded)
                   Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: FloatingActionButton(
-                      heroTag: 'text_fab',
-                      onPressed: _addText,
+                      heroTag: 'diary_fab',
+                      onPressed: _addDiary,
                       backgroundColor: Colors.pink.shade400,
                       foregroundColor: Colors.white,
                       mini: true,
                       shape: const CircleBorder(),
-                      child: const Icon(Icons.text_fields),
+                      child: const Icon(Icons.book),
                     ),
                   ),
                 // 主按钮
@@ -338,10 +362,28 @@ class _HomeScreenState extends State<HomeScreen> {
       monthGroups.putIfAbsent(entry.ageInMonths, () => []).add(entry);
     }
 
-    // Each month group has: 1 separator + N entries
+    final sortedMonths = monthGroups.keys.toList()
+      ..sort((a, b) => b.compareTo(a)); // Newest first
+
+    // Calculate current month
+    final currentDate = DateTime.now();
+    final birthDate = widget.config.childBirthDate;
+    final currentMonth = birthDate != null
+        ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
+        : null;
+
+    // Each month group has: 1 separator + N entries, but skip separator for latest month if same as current
     int count = 0;
-    for (final entries in monthGroups.values) {
-      count += 1 + entries.length; // 1 separator + entries
+    int monthIndex = 0;
+    for (final month in sortedMonths) {
+      final entries = monthGroups[month]!;
+      final isFirstMonth = monthIndex == 0;
+      final skipSeparator = isFirstMonth && month == currentMonth;
+      if (!skipSeparator) {
+        count += 1; // separator
+      }
+      count += entries.length; // entries
+      monthIndex++;
     }
 
     return count;
@@ -362,6 +404,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final sortedMonths = monthGroups.keys.toList()
       ..sort((a, b) => b.compareTo(a)); // Newest first
 
+    // Calculate current month
+    final currentDate = DateTime.now();
+    final birthDate = widget.config.childBirthDate;
+    final currentMonth = birthDate != null
+        ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
+        : null;
+
     int currentIndex = 0;
     int monthIndex = 0;
 
@@ -370,11 +419,16 @@ class _HomeScreenState extends State<HomeScreen> {
       final isFirstMonth = monthIndex == 0;
       final isLastMonth = monthIndex == sortedMonths.length - 1;
 
-      // Month separator
-      if (currentIndex == index) {
-        return _buildMonthSeparator(entries.first, isFirstMonth, isLastMonth);
+      // Skip month separator if it's the latest month and same as current month
+      final skipSeparator = isFirstMonth && month == currentMonth;
+
+      if (!skipSeparator) {
+        // Month separator
+        if (currentIndex == index) {
+          return _buildMonthSeparator(entries.first, isFirstMonth, isLastMonth);
+        }
+        currentIndex++;
       }
-      currentIndex++;
       monthIndex++;
 
       // Month entries
@@ -584,7 +638,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: 8),
                           Text(
                             entry.description,
-                            maxLines: 3,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 14,

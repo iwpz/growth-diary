@@ -240,7 +240,7 @@ class WebDAVService {
 
       for (final path in allMediaPaths) {
         try {
-          await _client!.remove('growth_diary/media/$path');
+          await _client!.remove(path);
           debugPrint('Deleted media file: $path');
         } catch (e) {
           debugPrint('Error deleting media file $path: $e');

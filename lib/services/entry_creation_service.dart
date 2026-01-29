@@ -2,15 +2,41 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:exif/exif.dart';
+import 'package:crypto/crypto.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
 import '../utils/age_calculator.dart';
 
+typedef UploadProgressCallback = void Function(int uploaded, int total);
+
 class EntryCreationService {
   final WebDAVService webdavService;
 
   EntryCreationService(this.webdavService);
+
+  String _generateFileName(File file, FileStat stat) {
+    final extension = path.extension(file.path);
+    final isLargeVideo = stat.size > 10 * 1024 * 1024; // 10MB
+
+    final bytes = file.readAsBytesSync();
+    Digest hash;
+
+    if (isLargeVideo) {
+      // 对于大视频，取前1MB内容 + 文件大小 + 修改时间
+      final prefix =
+          bytes.length > 1024 * 1024 ? bytes.sublist(0, 1024 * 1024) : bytes;
+      final sizeStr = stat.size.toString();
+      final mtimeStr = stat.modified.millisecondsSinceEpoch.toString();
+      final combined = prefix + sizeStr.codeUnits + mtimeStr.codeUnits;
+      hash = sha256.convert(combined);
+    } else {
+      // 对于其他文件，使用整个文件的SHA256
+      hash = sha256.convert(bytes);
+    }
+
+    return '${hash.toString()}$extension';
+  }
 
   DateTime _parseExifDate(String exifDate) {
     // EXIF日期格式: "YYYY:MM:DD HH:MM:SS"
@@ -39,7 +65,8 @@ class EntryCreationService {
   }
 
   Future<DiaryEntry> createImageEntry(
-      List<XFile> images, String description, AppConfig config) async {
+      List<XFile> images, String description, AppConfig config,
+      [UploadProgressCallback? onProgress]) async {
     // 确定记录日期
     DateTime date = DateTime.now();
     if (images.isNotEmpty) {
@@ -67,10 +94,11 @@ class EntryCreationService {
     // 上传图片
     final List<String> imagePaths = [];
     final List<String> imageThumbnails = [];
-    for (var xfile in images) {
+    for (var i = 0; i < images.length; i++) {
+      final xfile = images[i];
       final file = File(xfile.path);
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}';
+      final stat = await file.stat();
+      final fileName = _generateFileName(file, stat);
       final paths =
           await webdavService.uploadImageWithThumbnails(file, fileName);
       final pathList = paths.split('|');
@@ -81,6 +109,7 @@ class EntryCreationService {
         imagePaths.add(paths);
         imageThumbnails.add(paths); // 如果没有缩略图，使用原图
       }
+      onProgress?.call(i + 1, images.length);
     }
 
     // 生成标题
@@ -104,7 +133,8 @@ class EntryCreationService {
   }
 
   Future<DiaryEntry> createVideoEntry(
-      XFile video, String description, AppConfig config) async {
+      XFile video, String description, AppConfig config,
+      [UploadProgressCallback? onProgress]) async {
     // 确定记录日期
     DateTime date = DateTime.now();
     final videoFile = File(video.path);
@@ -112,13 +142,14 @@ class EntryCreationService {
     date = stat.changed;
 
     // 上传视频
-    final fileName =
-        '${DateTime.now().millisecondsSinceEpoch}_${path.basename(videoFile.path)}';
+    final fileName = _generateFileName(videoFile, stat);
     final paths =
         await webdavService.uploadVideoWithThumbnails(videoFile, fileName);
     final pathList = paths.split('|');
     final uploadedPath = pathList[0];
     final thumbnailPath = pathList.length >= 3 ? pathList[2] : paths;
+
+    onProgress?.call(1, 1);
 
     // 生成标题
     String title = description;
@@ -140,14 +171,15 @@ class EntryCreationService {
     return entry;
   }
 
-  Future<DiaryEntry> createTextEntry(String text, AppConfig config) async {
+  Future<DiaryEntry> createDiaryEntry(
+      String title, String content, AppConfig config) async {
     final date = DateTime.now();
 
     final entry = DiaryEntry(
       id: null,
       date: date,
-      title: text,
-      description: '',
+      title: title,
+      description: content,
       imagePaths: [],
       videoPaths: [],
       ageInMonths: _calculateAgeInMonths(date, config),
