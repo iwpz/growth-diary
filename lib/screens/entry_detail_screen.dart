@@ -97,6 +97,33 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
     );
   }
 
+  String _getAgeDisplayText() {
+    // 检查是否是孕期记录（在出生日期之前且配置了受孕日期）
+    final isPregnancyPeriod = widget.config.conceptionDate != null &&
+        widget.entry.date
+            .isBefore(widget.config.childBirthDate ?? DateTime.now());
+
+    if (isPregnancyPeriod) {
+      // 孕期记录：显示孕周和天数
+      final totalDays =
+          widget.entry.date.difference(widget.config.conceptionDate!).inDays;
+      final weeks = totalDays ~/ 7;
+      final days = totalDays % 7;
+      return '孕期 $weeks 周 $days 天';
+    } else if (widget.config.childBirthDate != null &&
+        widget.entry.date.isBefore(widget.config.childBirthDate!)) {
+      // 出生前记录但未配置受孕日期：显示出生前 X 月 X 天
+      final diff = widget.config.childBirthDate!.difference(widget.entry.date);
+      final totalDays = diff.inDays;
+      final months = totalDays ~/ 30; // 近似计算
+      final days = totalDays % 30;
+      return '出生前 $months 月 $days 天';
+    } else {
+      // 出生后记录：显示年龄
+      return widget.entry.getAgeLabel(widget.config.childBirthDate);
+    }
+  }
+
   void _showFullScreenVideo(String videoPath) {
     // 暂时显示一个简单的对话框，未来可以实现视频播放
     showDialog(
@@ -181,7 +208,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.entry.getAgeLabel(widget.config.childBirthDate),
+                        _getAgeDisplayText(),
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
