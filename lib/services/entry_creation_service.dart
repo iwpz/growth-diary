@@ -67,8 +67,10 @@ class EntryCreationService {
   Future<DiaryEntry> createImageEntry(
       List<XFile> images, String description, AppConfig config,
       [UploadProgressCallback? onProgress, DateTime? overrideDate]) async {
-    // 确定记录日期
+    // 确定记录日期和第一张照片的时间戳
     DateTime date = DateTime.now();
+    String? photoTimestampId;
+
     if (overrideDate != null) {
       date = overrideDate;
     } else if (images.isNotEmpty) {
@@ -81,15 +83,19 @@ class EntryCreationService {
         final imageDateTime = exifData['Image DateTime'];
         if (dateTimeOriginal != null) {
           date = _parseExifDate(dateTimeOriginal.toString());
+          photoTimestampId = date.millisecondsSinceEpoch.toString();
         } else if (imageDateTime != null) {
           date = _parseExifDate(imageDateTime.toString());
+          photoTimestampId = date.millisecondsSinceEpoch.toString();
         } else {
           final stat = await firstImage.stat();
           date = stat.changed;
+          photoTimestampId = stat.changed.millisecondsSinceEpoch.toString();
         }
       } catch (e) {
         final stat = await firstImage.stat();
         date = stat.changed;
+        photoTimestampId = stat.changed.millisecondsSinceEpoch.toString();
       }
     }
 
@@ -118,7 +124,7 @@ class EntryCreationService {
     String title = description;
 
     final entry = DiaryEntry(
-      id: null,
+      id: photoTimestampId,
       date: date,
       title: title,
       description: description,
@@ -139,12 +145,15 @@ class EntryCreationService {
       [UploadProgressCallback? onProgress, DateTime? overrideDate]) async {
     // 确定记录日期
     DateTime date = DateTime.now();
+    String? videoTimestampId;
     final videoFile = File(video.path);
     final stat = await videoFile.stat();
     if (overrideDate != null) {
       date = overrideDate;
+      videoTimestampId = date.millisecondsSinceEpoch.toString();
     } else {
       date = stat.changed;
+      videoTimestampId = stat.changed.millisecondsSinceEpoch.toString();
     }
 
     // 上传视频
@@ -161,7 +170,7 @@ class EntryCreationService {
     String title = description;
 
     final entry = DiaryEntry(
-      id: null,
+      id: videoTimestampId,
       date: date,
       title: title,
       description: description,
