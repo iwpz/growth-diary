@@ -45,10 +45,10 @@ class WebDAVService {
         debugPrint('mkdir $baseDir: $e');
       }
       try {
-        await _client!.mkdir('${_getBasePath()}/entries');
+        await _client!.mkdir(_getEntriesPath());
       } catch (e) {
         // Ignore if directory already exists (409 Conflict)
-        debugPrint('mkdir ${_getBasePath()}/entries: $e');
+        debugPrint('mkdir ${_getEntriesPath()}: $e');
       }
       try {
         await _client!.mkdir('${_getBasePath()}/media');
@@ -121,7 +121,8 @@ class WebDAVService {
             final content =
                 await _client!.read('${_getEntriesPath()}/${file.name}');
             final jsonData = jsonDecode(utf8.decode(content));
-            entries.add(DiaryEntry.fromJson(jsonData));
+            final entry = DiaryEntry.fromJson(jsonData);
+            entries.add(entry);
           } catch (e) {
             debugPrint('Error loading entry ${file.name}: $e');
           }
@@ -311,7 +312,7 @@ class WebDAVService {
 
       for (final path in allMediaPaths) {
         try {
-          // 如果路径不以 'growth_diary/' 开头，则认为是相对路径，需要拼接前缀
+          // 媒体文件现在在当前宝宝的文件夹中
           final fullPath = '${_getBasePath()}/$path';
           await _client!.remove(fullPath);
           debugPrint('Deleted media file: $fullPath');

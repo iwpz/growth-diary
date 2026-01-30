@@ -32,7 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _showEditChildNameDialog() async {
-    String newName = _config.childName;
+    String newName = _config.babyName;
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -55,8 +55,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (result == true && newName.isNotEmpty) {
+      final updatedConfig = _config.copyWith(babyName: newName);
       setState(() {
-        _config = _config.copyWith(childName: newName);
+        _config = updatedConfig;
       });
       await _localStorage.saveConfig(_config);
       await widget.webdavService.saveConfig(_config);
@@ -72,13 +73,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _editBirthDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _config.childBirthDate ?? DateTime.now(),
+      initialDate: _config.babyBirthDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
     );
     if (picked != null) {
+      final updatedConfig = _config.copyWith(babyBirthDate: picked);
       setState(() {
-        _config = _config.copyWith(childBirthDate: picked);
+        _config = updatedConfig;
       });
       await _localStorage.saveConfig(_config);
       await widget.webdavService.saveConfig(_config);
@@ -94,13 +96,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _editConceptionDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _config.conceptionDate ?? DateTime.now(),
+      initialDate: _config.babyConceptionDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
     );
     if (picked != null) {
+      final updatedConfig = _config.copyWith(babyConceptionDate: picked);
       setState(() {
-        _config = _config.copyWith(conceptionDate: picked);
+        _config = updatedConfig;
       });
       await _localStorage.saveConfig(_config);
       await widget.webdavService.saveConfig(_config);
@@ -133,11 +136,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirm == true) {
-      await _localStorage.clearConfig();
+      await _localStorage.clearAllConfigs();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-            builder: (context) => const SetupScreen(),
+            builder: (context) => SetupScreen(
+              localStorage: _localStorage,
+            ),
           ),
           (route) => false,
         );
@@ -191,8 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.cloud),
             title: const Text('WebDAV 配置'),
-            subtitle:
-                Text('${widget.config.webdavUrl} (${widget.config.username})'),
+            subtitle: Text('${_config.webdavUrl} (${_config.username})'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.push(

@@ -108,8 +108,8 @@ class BackgroundUploadService {
   static Function()? _onUploadProgressUpdated;
 
   // 跟踪活跃的上传任务
-  static Map<String, UploadTask> _activeTasks = {};
-  static Map<String, bool> _activeUploads = {}; // 兼容性保留
+  static final Map<String, UploadTask> _activeTasks = {};
+  static final Map<String, bool> _activeUploads = {}; // 兼容性保留
 
   static Future<void> initialize() async {
     // 初始化通知插件
@@ -236,7 +236,7 @@ class BackgroundUploadService {
       priority: Priority.high,
       showProgress: false, // 不显示进度条
       autoCancel: true, // 自动消失
-      color: const Color(0xFF4CAF50), // 绿色表示成功
+      color: Color(0xFF4CAF50), // 绿色表示成功
       timeoutAfter: 5000, // 5秒后自动消失
       visibility: NotificationVisibility.public,
       category: AndroidNotificationCategory.status,
@@ -430,14 +430,14 @@ class BackgroundUploadService {
       priority: Priority.defaultPriority,
       ongoing: true, // 持续通知
       autoCancel: false,
-      color: const Color(0xFFE91E63),
+      color: Color(0xFFE91E63),
       visibility: NotificationVisibility.public,
       category: AndroidNotificationCategory.service,
     );
 
     const iosDetails = DarwinNotificationDetails();
 
-    final details = NotificationDetails(
+    const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );

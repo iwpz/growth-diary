@@ -57,8 +57,10 @@ class _DiaryEditorScreenState extends State<DiaryEditorScreen> {
     try {
       await _entryService.createDiaryEntry(title, content, widget.config,
           customDate: _selectedDate);
+      if (!mounted) return;
       Navigator.of(context).pop(); // 返回上一页
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('保存日记失败: $e')),
       );

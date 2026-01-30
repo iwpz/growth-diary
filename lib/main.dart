@@ -66,10 +66,15 @@ class _SplashScreenState extends State<SplashScreen> {
       print('WorkManager initialization failed: $e');
     }
 
-    // Load config from local storage
-    final config = await _localStorage.loadConfig();
+    // Load all configs from local storage
+    final configs = await _localStorage.loadAllConfigs();
+    final currentConfigId = await _localStorage.getCurrentConfigId();
 
-    if (config != null && config.isConfigured) {
+    if (configs.isNotEmpty) {
+      // 如果有配置，选择当前配置或第一个配置
+      final configId = currentConfigId ?? configs.keys.first;
+      final config = configs[configId]!;
+
       try {
         // Initialize WebDAV service
         await _webdavService.initialize(config);
@@ -78,12 +83,18 @@ class _SplashScreenState extends State<SplashScreen> {
         final webdavConfig = await _webdavService.loadConfig();
         final finalConfig = webdavConfig ?? config;
 
+        // 更新配置到configs中
+        configs[configId] = finalConfig;
+        await _localStorage.saveAllConfigs(configs);
+
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (context) => HomeScreen(
-              config: finalConfig,
+              configs: configs,
+              currentConfigId: configId,
               webdavService: _webdavService,
+              localStorage: _localStorage,
             ),
           ),
         );
@@ -93,18 +104,22 @@ class _SplashScreenState extends State<SplashScreen> {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (context) => HomeScreen(
-              config: config,
+              configs: configs,
+              currentConfigId: configId,
               webdavService: _webdavService,
+              localStorage: _localStorage,
             ),
           ),
         );
       }
     } else {
-      // No config found, show setup screen
+      // No configs found, show setup screen
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => const SetupScreen(),
+          builder: (context) => SetupScreen(
+            localStorage: _localStorage,
+          ),
         ),
       );
     }

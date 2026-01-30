@@ -9,18 +9,23 @@ import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
 import '../services/background_upload_service.dart';
 import '../utils/age_calculator.dart';
+import '../services/local_storage_service.dart';
 import 'entry_detail_screen.dart';
 import 'settings_screen.dart';
 import 'diary_editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final AppConfig config;
+  final Map<String, AppConfig> configs;
+  final String currentConfigId;
   final WebDAVService webdavService;
+  final LocalStorageService localStorage;
 
   const HomeScreen({
     super.key,
-    required this.config,
+    required this.configs,
+    required this.currentConfigId,
     required this.webdavService,
+    required this.localStorage,
   });
 
   @override
@@ -37,13 +42,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isExpanded = false;
   final ImagePicker _picker = ImagePicker();
 
-  late AppConfig config;
+  late Map<String, AppConfig> configs;
+  late String currentConfigId;
+  late AppConfig currentConfig;
   final ScrollController _scrollController = ScrollController();
   static const int _pageSize = 10;
 
   // 上传进度相关状态
-  Timer? _uploadProgressTimer;
-  int _progressUpdateCounter = 0; // 用于强制更新UI
 
   DateTime _parseExifDate(String exifDate) {
     // EXIF日期格式: "YYYY:MM:DD HH:MM:SS"
@@ -69,7 +74,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    config = widget.config;
+    configs = Map.from(widget.configs);
+    currentConfigId = widget.currentConfigId;
+    currentConfig = configs[currentConfigId]!;
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addObserver(this);
 
@@ -79,8 +86,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // 设置上传进度更新回调，用于实时更新UI
     BackgroundUploadService.setUploadProgressCallback(_onUploadProgressUpdated);
 
-    // 启动上传进度监控
-    _startUploadProgressMonitoring();
+    // 初始化WebDAV服务，为当前宝宝创建文件夹
+    widget.webdavService.initialize(currentConfig).then((_) {
+      debugPrint('WebDAV service initialized');
+    }).catchError((e) {
+      debugPrint('Error initializing WebDAV service: $e');
+    });
 
     _loadEntries();
   }
@@ -89,7 +100,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     _scrollController.dispose();
     WidgetsBinding.instance.removeObserver(this);
-    _stopUploadProgressMonitoring();
     super.dispose();
   }
 
@@ -121,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
 
     try {
-      final entries = await widget.webdavService.loadEntriesPage(0, _pageSize);
+      final entries = await widget.webdavService.loadAllEntries();
       setState(() {
         _entries = entries;
         _isLoading = false;
@@ -137,6 +147,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       }
     }
+  }
+
+  Future<void> _switchConfig() async {
+    // 重新初始化WebDAV服务
+    await widget.webdavService.initialize(currentConfig);
+
+    // 清除当前数据
+    setState(() {
+      _entries.clear();
+      _thumbnailCache.clear();
+      _thumbnailFutures.clear();
+      _isLoading = true;
+      _hasMoreData = true;
+    });
+
+    // 重新加载数据
+    _loadEntries();
   }
 
   Future<void> _loadMoreEntries() async {
@@ -223,8 +250,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ElevatedButton(
                 onPressed: () async {
                   // 计算 firstDate：优先使用 conceptionDate，否则使用 childBirthDate 减去 280 天，最后使用 2000 年
-                  final firstDate = config.conceptionDate ??
-                      (config.childBirthDate
+                  final firstDate = currentConfig.conceptionDate ??
+                      (currentConfig.childBirthDate
                           ?.subtract(const Duration(days: 280))) ??
                       DateTime(2000);
                   final picked = await showDatePicker(
@@ -302,11 +329,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       String? description;
       DateTime? selectedDate;
       DateTime? thresholdDate;
-      if (config.conceptionDate != null) {
-        thresholdDate = config.conceptionDate;
-      } else if (config.childBirthDate != null) {
+      if (currentConfig.conceptionDate != null) {
+        thresholdDate = currentConfig.conceptionDate;
+      } else if (currentConfig.childBirthDate != null) {
         thresholdDate =
-            config.childBirthDate!.subtract(const Duration(days: 280));
+            currentConfig.childBirthDate!.subtract(const Duration(days: 280));
       }
 
       if (thresholdDate != null && detectedDate.isBefore(thresholdDate)) {
@@ -326,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await BackgroundUploadService.startBackgroundUpload(
         mediaPaths: mediaPaths,
         description: description,
-        config: config,
+        config: currentConfig,
         overrideDate: selectedDate,
       );
 
@@ -334,16 +361,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _updateUploadProgress();
 
       // 显示提示信息
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已添加到后台上传队列，请查看通知栏了解进度')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已添加到后台上传队列，请查看通知栏了解进度')),
+        );
+      }
 
       // 不需要重新加载entries，因为后台上传完成后不会自动刷新
       // 用户可以手动刷新或等待下次进入应用时看到新内容
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('启动后台上传失败: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('启动后台上传失败: $e')),
+        );
+      }
     }
   }
 
@@ -364,11 +395,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       String? description;
       DateTime? selectedDate;
       DateTime? thresholdDate;
-      if (config.conceptionDate != null) {
-        thresholdDate = config.conceptionDate;
-      } else if (config.childBirthDate != null) {
+      if (currentConfig.conceptionDate != null) {
+        thresholdDate = currentConfig.conceptionDate;
+      } else if (currentConfig.childBirthDate != null) {
         thresholdDate =
-            config.childBirthDate!.subtract(const Duration(days: 280));
+            currentConfig.childBirthDate!.subtract(const Duration(days: 280));
       }
 
       if (thresholdDate != null && detectedDate.isBefore(thresholdDate)) {
@@ -385,7 +416,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await BackgroundUploadService.startBackgroundUpload(
         mediaPaths: [video.path],
         description: description,
-        config: config,
+        config: currentConfig,
         overrideDate: selectedDate,
       );
 
@@ -393,13 +424,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _updateUploadProgress();
 
       // 显示提示信息
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已添加到后台上传队列，请查看通知栏了解进度')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已添加到后台上传队列，请查看通知栏了解进度')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('启动后台上传失败: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('启动后台上传失败: $e')),
+        );
+      }
     }
   }
 
@@ -410,7 +445,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context,
       MaterialPageRoute(
         builder: (context) => DiaryEditorScreen(
-          config: config,
+          config: currentConfig,
           webdavService: widget.webdavService,
         ),
       ),
@@ -450,41 +485,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _startUploadProgressMonitoring() {
-    // 启动上传进度监控，每秒更新一次
-    _uploadProgressTimer?.cancel();
-    _uploadProgressTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _updateUploadProgress();
-    });
-    _updateUploadProgress(); // 立即更新一次
-  }
-
-  void _stopUploadProgressMonitoring() {
-    // 停止上传进度监控
-    _uploadProgressTimer?.cancel();
-    _uploadProgressTimer = null;
-    setState(() {
-      _progressUpdateCounter = 0; // 重置计数器
-    });
-  }
-
   void _updateUploadProgress() {
     if (!mounted) return;
-
-    final allTasks = BackgroundUploadService.getAllUploadTasks();
-
-    final activeTasks = allTasks
-        .where((task) => task.status == UploadStatus.uploading)
-        .toList();
-
-    setState(() {
-      _progressUpdateCounter++; // 强制UI更新
-    });
-
-    // 如果没有活跃任务，停止监控
-    if (activeTasks.isEmpty) {
-      _stopUploadProgressMonitoring();
-    }
+    setState(() {});
   }
 
   @override
@@ -505,6 +508,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       appBar: AppBar(
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         title: GestureDetector(
           onDoubleTap: () {
             _scrollController.animateTo(
@@ -518,7 +527,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               Flexible(
                 child: Text(
-                  '${config.childName}的成长日记',
+                  currentConfig.babyName,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -556,12 +565,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 context,
                 MaterialPageRoute(
                   builder: (context) => SettingsScreen(
-                    config: config,
+                    config: currentConfig,
                     webdavService: widget.webdavService,
                     onConfigChanged: (newConfig) {
                       setState(() {
-                        config = newConfig;
+                        configs[newConfig.id] = newConfig;
+                        if (currentConfigId == newConfig.id) {
+                          currentConfig = newConfig;
+                        }
                       });
+                      widget.localStorage.saveAllConfigs(configs);
                     },
                   ),
                 ),
@@ -570,6 +583,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
+      drawer: _buildDrawer(),
       body: Stack(
         children: [
           if (_isLoading)
@@ -694,25 +708,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (sortedEntries.isNotEmpty) {
       final latestEntry = sortedEntries.first;
       final currentDate = DateTime.now();
-      final birthDate = config.childBirthDate;
+      final birthDate = currentConfig.childBirthDate;
       if (birthDate != null) {
         final currentAgeInMonths =
             AgeCalculator.calculateAgeInMonths(birthDate, currentDate);
-        final latestEntryGroupKey = latestEntry.getGroupKey(config);
+        final latestEntryGroupKey = latestEntry.getGroupKey(currentConfig);
 
         // If latest entry is not in current month, add its month separator
         if (latestEntryGroupKey != currentAgeInMonths) {
-          final isPregnancyPeriod = config.conceptionDate != null &&
+          final isPregnancyPeriod = currentConfig.conceptionDate != null &&
               latestEntry.date.isBefore(birthDate);
           items.add(_buildGroupSeparator(
-              latestEntry, false, false, isPregnancyPeriod, config));
+              latestEntry, false, false, isPregnancyPeriod, currentConfig));
         }
       }
     }
 
     // Find insertion points for special labels
-    DateTime? birthDate = config.childBirthDate;
-    DateTime? conceptionDate = config.conceptionDate;
+    DateTime? birthDate = currentConfig.childBirthDate;
+    DateTime? conceptionDate = currentConfig.conceptionDate;
 
     // Track if we've inserted special labels
     bool hasInsertedBirthLabel = false;
@@ -752,11 +766,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (sortedEntries.isNotEmpty) {
       final latestEntry = sortedEntries.first;
       final currentDate = DateTime.now();
-      final birthDate = config.childBirthDate;
+      final birthDate = currentConfig.childBirthDate;
       if (birthDate != null) {
         final currentAgeInMonths =
             AgeCalculator.calculateAgeInMonths(birthDate, currentDate);
-        latestEntryGroupKey = latestEntry.getGroupKey(config);
+        latestEntryGroupKey = latestEntry.getGroupKey(currentConfig);
         // If we added the latest entry's month separator above, mark it as already handled
         if (latestEntryGroupKey != currentAgeInMonths) {
           currentGroupKey = latestEntryGroupKey;
@@ -767,24 +781,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     for (int i = 0; i < sortedEntries.length; i++) {
       final entry = sortedEntries[i];
-      final entryGroupKey = entry.getGroupKey(config);
+      final entryGroupKey = entry.getGroupKey(currentConfig);
 
       // Check if we need to insert group separator
       if (currentGroupKey != entryGroupKey) {
         if (currentGroupKey != null) {
           // This is not the first group, add separator before this group
-          final isPregnancyPeriod = config.conceptionDate != null &&
+          final isPregnancyPeriod = currentConfig.conceptionDate != null &&
               entry.date.isBefore(birthDate ?? DateTime.now());
           // Check if this is the last group
           bool isLastGroup = true;
           for (int j = i; j < sortedEntries.length; j++) {
-            if (sortedEntries[j].getGroupKey(config) != entryGroupKey) {
+            if (sortedEntries[j].getGroupKey(currentConfig) != entryGroupKey) {
               isLastGroup = false;
               break;
             }
           }
-          items.add(_buildGroupSeparator(
-              entry, isFirstGroup, isLastGroup, isPregnancyPeriod, config));
+          items.add(_buildGroupSeparator(entry, isFirstGroup, isLastGroup,
+              isPregnancyPeriod, currentConfig));
           isFirstGroup = false;
         }
         currentGroupKey = entryGroupKey;
@@ -804,9 +818,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final isFirst = i == 0;
       final isLast = i == sortedEntries.length - 1 && hasPregnancyEntries;
       final isFirstInGroup = entryGroupKey !=
-          (i > 0 ? sortedEntries[i - 1].getGroupKey(config) : null);
+          (i > 0 ? sortedEntries[i - 1].getGroupKey(currentConfig) : null);
       final isLastInGroup = i == sortedEntries.length - 1 ||
-          entryGroupKey != sortedEntries[i + 1].getGroupKey(config);
+          entryGroupKey != sortedEntries[i + 1].getGroupKey(currentConfig);
 
       items.add(_buildTimelineItem(entry, isFirst, isLast, isFirstInGroup,
           isLastInGroup && conceptionDate == null));
@@ -1015,7 +1029,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     MaterialPageRoute(
                       builder: (context) => EntryDetailScreen(
                         entry: entry,
-                        config: config,
+                        config: currentConfig,
                         webdavService: widget.webdavService,
                       ),
                     ),
@@ -1238,7 +1252,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildBirthDateLabel({bool showBottomLine = true}) {
-    final birthDate = config.childBirthDate;
+    final birthDate = currentConfig.childBirthDate;
     if (birthDate == null) return const SizedBox.shrink();
 
     return Row(
@@ -1313,7 +1327,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildPregnancyLabel() {
-    final conceptionDate = config.conceptionDate;
+    final conceptionDate = currentConfig.conceptionDate;
     if (conceptionDate == null) return const SizedBox.shrink();
 
     return Row(
@@ -1383,7 +1397,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildCurrentMonthSeparator() {
     final currentDate = DateTime.now();
-    final birthDate = config.childBirthDate;
+    final birthDate = currentConfig.childBirthDate;
     if (birthDate == null) {
       return const SizedBox.shrink(); // Or some default
     }
@@ -1465,5 +1479,244 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ],
     );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: Column(
+        children: [
+          // 抽屉头部
+          Container(
+            height: 120,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.pink.shade300, Colors.pink.shade600],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const SafeArea(
+              child: Center(
+                child: Text(
+                  '宝宝成长日记',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // 配置列表
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                ...configs.values.map((config) => ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: currentConfigId == config.id
+                            ? Colors.pink.shade100
+                            : Colors.grey.shade200,
+                        child: Icon(
+                          Icons.child_care,
+                          color: currentConfigId == config.id
+                              ? Colors.pink
+                              : Colors.grey,
+                        ),
+                      ),
+                      title: Text(
+                        config.babyName,
+                        style: TextStyle(
+                          fontWeight: currentConfigId == config.id
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: currentConfigId == config.id
+                              ? Colors.pink.shade700
+                              : Colors.black,
+                        ),
+                      ),
+                      subtitle: Text(config.getAgeLabel()),
+                      trailing: currentConfigId == config.id
+                          ? const Icon(Icons.check, color: Colors.pink)
+                          : null,
+                      onTap: () {
+                        setState(() {
+                          currentConfigId = config.id;
+                          currentConfig = config;
+                          widget.localStorage.setCurrentConfigId(config.id);
+                        });
+                        Navigator.of(context).pop(); // 关闭抽屉
+                        _switchConfig(); // 切换配置
+                      },
+                    )),
+
+                const Divider(),
+
+                // 添加宝宝选项
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.pink.shade100,
+                    child: const Icon(
+                      Icons.add,
+                      color: Colors.pink,
+                    ),
+                  ),
+                  title: const Text(
+                    '添加宝宝',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop(); // 关闭抽屉
+                    _showAddBabyDialog();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddBabyDialog() async {
+    String babyName = '';
+    DateTime? birthDate;
+    DateTime? conceptionDate;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('添加宝宝'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  decoration: const InputDecoration(
+                    labelText: '宝宝姓名',
+                    hintText: '请输入宝宝姓名',
+                  ),
+                  onChanged: (value) => babyName = value,
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  title: const Text('出生日期'),
+                  subtitle: Text(
+                    birthDate != null
+                        ? '${birthDate!.year}-${birthDate!.month.toString().padLeft(2, '0')}-${birthDate!.day.toString().padLeft(2, '0')}'
+                        : '未设置',
+                  ),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setState(() => birthDate = picked);
+                    }
+                  },
+                ),
+                ListTile(
+                  title: const Text('受孕日期'),
+                  subtitle: Text(
+                    conceptionDate != null
+                        ? '${conceptionDate!.year}-${conceptionDate!.month.toString().padLeft(2, '0')}-${conceptionDate!.day.toString().padLeft(2, '0')}'
+                        : '未设置',
+                  ),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate:
+                          birthDate?.subtract(const Duration(days: 280)) ??
+                              DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      setState(() => conceptionDate = picked);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: babyName.trim().isNotEmpty
+                  ? () => Navigator.of(context).pop({
+                        'name': babyName.trim(),
+                        'birthDate': birthDate,
+                        'conceptionDate': conceptionDate,
+                      })
+                  : null,
+              child: const Text('添加'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      // 创建新配置，复制当前配置的WebDAV设置
+      final newConfig = AppConfig(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        webdavUrl: currentConfig.webdavUrl,
+        username: currentConfig.username,
+        password: currentConfig.password,
+        babyName: result['name'],
+        babyBirthDate: result['birthDate'],
+        babyConceptionDate: result['conceptionDate'],
+      );
+
+      // 添加到配置列表
+      setState(() {
+        configs[newConfig.id] = newConfig;
+        currentConfigId = newConfig.id;
+        currentConfig = newConfig;
+      });
+
+      // 保存配置
+      await widget.localStorage.saveAllConfigs(configs);
+      await widget.localStorage.setCurrentConfigId(newConfig.id);
+
+      // 导航到设置页面进行云服务配置
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SettingsScreen(
+              config: newConfig,
+              webdavService: widget.webdavService,
+              onConfigChanged: (updatedConfig) {
+                setState(() {
+                  configs[updatedConfig.id] = updatedConfig;
+                  if (currentConfigId == updatedConfig.id) {
+                    currentConfig = updatedConfig;
+                  }
+                });
+                widget.localStorage.saveAllConfigs(configs);
+              },
+            ),
+          ),
+        ).then((_) {
+          // 返回后重新加载数据
+          _switchConfig();
+        });
+      }
+    }
   }
 }

@@ -6,7 +6,9 @@ import 'home_screen.dart';
 import 'webdav_config_screen.dart';
 
 class SetupScreen extends StatefulWidget {
-  const SetupScreen({super.key});
+  final LocalStorageService? localStorage;
+
+  const SetupScreen({super.key, this.localStorage});
 
   @override
   State<SetupScreen> createState() => _SetupScreenState();
@@ -21,7 +23,6 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _isPregnant = false; // false = 已出生, true = 怀孕中
   AppConfig? _webdavConfig;
 
-  final LocalStorageService _localStorage = LocalStorageService();
   final WebDAVService _webdavService = WebDAVService();
 
   @override
@@ -111,12 +112,13 @@ class _SetupScreenState extends State<SetupScreen> {
 
     try {
       final config = AppConfig(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
         webdavUrl: _webdavConfig!.webdavUrl,
         username: _webdavConfig!.username,
         password: _webdavConfig!.password,
-        childBirthDate: _isPregnant ? null : _childBirthDate,
-        childName: _childNameController.text.trim(),
-        conceptionDate: _isPregnant ? _conceptionDate : null,
+        babyName: _childNameController.text.trim(),
+        babyBirthDate: _isPregnant ? null : _childBirthDate,
+        babyConceptionDate: _isPregnant ? _conceptionDate : null,
       );
 
       // Initialize WebDAV
@@ -126,15 +128,19 @@ class _SetupScreenState extends State<SetupScreen> {
       await _webdavService.saveConfig(config);
 
       // Save config locally
-      await _localStorage.saveConfig(config);
+      final localStorage = widget.localStorage ?? LocalStorageService();
+      await localStorage.saveConfig(config);
+      await localStorage.setCurrentConfigId(config.id);
 
       if (!mounted) return;
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (context) => HomeScreen(
-            config: config,
+            configs: {config.id: config},
+            currentConfigId: config.id,
             webdavService: _webdavService,
+            localStorage: localStorage,
           ),
         ),
       );
