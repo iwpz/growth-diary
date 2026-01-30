@@ -344,57 +344,83 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${widget.entry.videoPaths.length} 个视频（存储在 WebDAV）',
+                '${widget.entry.videoPaths.length} 个视频',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
                 ),
               ),
               const SizedBox(height: 8),
-              Column(
-                children:
-                    widget.entry.videoPaths.asMap().entries.map((videoEntry) {
-                  final index = videoEntry.key;
-                  final path = videoEntry.value;
-                  final thumbnail = _videoThumbnailCache[path];
-                  final isLoading = _loadingVideoThumbnails[path] ?? false;
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: widget.entry.videoPaths.length,
+                itemBuilder: (context, index) {
+                  final path = widget.entry.videoPaths[index];
+                  final thumbnailPath = widget.entry.videoThumbnails[index];
+                  final thumbnail = _videoThumbnailCache[thumbnailPath];
+                  final isLoading =
+                      _loadingVideoThumbnails[thumbnailPath] ?? false;
 
                   return GestureDetector(
                     onTap: () => _showFullScreenVideo(path),
-                    child: Card(
-                      child: ListTile(
-                        leading: Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Stack(
+                        children: [
+                          // 缩略图
+                          Positioned.fill(
+                            child: isLoading
+                                ? const Center(
+                                    child: CircularProgressIndicator())
+                                : thumbnail != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.memory(
+                                          thumbnail,
+                                          fit: BoxFit.cover,
+                                          width: double.infinity,
+                                          height: double.infinity,
+                                        ),
+                                      )
+                                    : const Center(
+                                        child: Icon(
+                                          Icons.videocam,
+                                          size: 40,
+                                          color: Colors.purple,
+                                        ),
+                                      ),
                           ),
-                          child: isLoading
-                              ? const Center(child: CircularProgressIndicator())
-                              : thumbnail != null
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.memory(
-                                        thumbnail,
-                                        fit: BoxFit.cover,
-                                        width: 60,
-                                        height: 60,
-                                      ),
-                                    )
-                                  : const Center(
-                                      child: Icon(
-                                        Icons.videocam,
-                                        color: Colors.purple,
-                                      ),
-                                    ),
-                        ),
-                        title: Text('视频 ${index + 1}'),
-                        subtitle: Text(path),
+                          // 视频播放图标覆盖层
+                          Positioned(
+                            bottom: 4,
+                            right: 4,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.play_arrow,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
-                }).toList(),
+                },
               ),
             ],
           ],
