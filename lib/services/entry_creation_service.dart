@@ -187,11 +187,19 @@ class EntryCreationService {
   }
 
   Future<DiaryEntry> createDiaryEntry(
-      String title, String content, AppConfig config) async {
-    final date = DateTime.now();
+      String title, String content, AppConfig config,
+      {DateTime? customDate}) async {
+    final date = customDate ?? DateTime.now();
+    final publicationTime = DateTime.now();
+
+    // 如果有自定义日期，使用自定义日期 + 发布时间戳作为ID
+    // 否则只使用发布时间戳
+    final id = customDate != null
+        ? '${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}_${publicationTime.millisecondsSinceEpoch}'
+        : publicationTime.millisecondsSinceEpoch.toString();
 
     final entry = DiaryEntry(
-      id: null,
+      id: id,
       date: date,
       title: title,
       description: content,

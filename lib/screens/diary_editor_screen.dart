@@ -21,6 +21,7 @@ class _DiaryEditorScreenState extends State<DiaryEditorScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   late final EntryCreationService _entryService;
+  DateTime? _selectedDate;
 
   @override
   void initState() {
@@ -28,11 +29,18 @@ class _DiaryEditorScreenState extends State<DiaryEditorScreen> {
     _entryService = EntryCreationService(widget.webdavService);
   }
 
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _contentController.dispose();
-    super.dispose();
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
   }
 
   Future<void> _saveDiary() async {
@@ -47,7 +55,8 @@ class _DiaryEditorScreenState extends State<DiaryEditorScreen> {
     }
 
     try {
-      await _entryService.createDiaryEntry(title, content, widget.config);
+      await _entryService.createDiaryEntry(title, content, widget.config,
+          customDate: _selectedDate);
       Navigator.of(context).pop(); // 返回上一页
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -75,14 +84,33 @@ class _DiaryEditorScreenState extends State<DiaryEditorScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: '标题',
-                hintText: '输入日记标题（可选）',
-                border: OutlineInputBorder(),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(
+                      labelText: '标题',
+                      hintText: '输入日记标题（可选）',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.calendar_today),
+                  onPressed: _selectDate,
+                  tooltip: '设置日期',
+                ),
+              ],
             ),
+            if (_selectedDate != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '日期: ${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}',
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+              ),
             const SizedBox(height: 16),
             Expanded(
               child: TextField(
