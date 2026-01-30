@@ -604,15 +604,25 @@ class _HomeScreenState extends State<HomeScreen> {
     int? firstPostBirthIndex;
     int? lastPostBirthIndex;
     bool hasPreBirthEntries = false;
+    bool hasPregnancyEntries = false;
 
     for (int i = 0; i < sortedEntries.length; i++) {
       if (birthDate != null) {
         if (sortedEntries[i].date.isBefore(birthDate)) {
           hasPreBirthEntries = true;
+          // Check if this is a pregnancy entry (between conception and birth)
+          if (conceptionDate != null &&
+              sortedEntries[i].date.isAfter(conceptionDate)) {
+            hasPregnancyEntries = true;
+          }
         } else {
           firstPostBirthIndex ??= i;
           lastPostBirthIndex = i; // Keep updating to get the last one
         }
+      } else if (conceptionDate != null &&
+          sortedEntries[i].date.isAfter(conceptionDate)) {
+        // If no birth date is set, any entry after conception is considered pregnancy entry
+        hasPregnancyEntries = true;
       }
     }
 
@@ -665,6 +675,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // Check if we need to insert conception label before this entry
       if (conceptionDate != null &&
           !hasInsertedConceptionLabel &&
+          hasPregnancyEntries &&
           entry.date.isBefore(conceptionDate) &&
           (i == 0 || sortedEntries[i - 1].date.isAfter(conceptionDate))) {
         items.add(_buildPregnancyLabel());
@@ -694,7 +705,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // Add special labels at the end if not inserted yet
-    if (conceptionDate != null && !hasInsertedConceptionLabel) {
+    if (conceptionDate != null &&
+        !hasInsertedConceptionLabel &&
+        hasPregnancyEntries) {
       items.add(_buildPregnancyLabel());
     }
     if (birthDate != null && !hasInsertedBirthLabel) {

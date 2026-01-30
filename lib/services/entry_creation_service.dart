@@ -64,83 +64,144 @@ class EntryCreationService {
     return AgeCalculator.calculateAgeInMonths(birthDate, date);
   }
 
-  Future<DiaryEntry> createImageEntry(
+  Future<List<DiaryEntry>> createImageEntry(
       List<XFile> images, String description, AppConfig config,
       [UploadProgressCallback? onProgress, DateTime? overrideDate]) async {
-    // 确定记录日期和第一张照片的时间戳
-    DateTime date = DateTime.now();
-    String? photoTimestampId;
+    if (images.isEmpty) return [];
 
+    // 如果指定了overrideDate，所有图片都使用这个日期
     if (overrideDate != null) {
-      date = overrideDate;
-    } else if (images.isNotEmpty) {
-      // 使用第一张图片的EXIF拍摄日期或创建日期作为记录日期
-      final firstImage = File(images.first.path);
-      try {
-        final exifData =
-            await readExifFromBytes(await firstImage.readAsBytes());
-        final dateTimeOriginal = exifData['EXIF DateTimeOriginal'];
-        final imageDateTime = exifData['Image DateTime'];
-        if (dateTimeOriginal != null) {
-          date = _parseExifDate(dateTimeOriginal.toString());
-          photoTimestampId = date.millisecondsSinceEpoch.toString();
-        } else if (imageDateTime != null) {
-          date = _parseExifDate(imageDateTime.toString());
-          photoTimestampId = date.millisecondsSinceEpoch.toString();
+      final List<String> imagePaths = [];
+      final List<String> imageThumbnails = [];
+
+      for (var i = 0; i < images.length; i++) {
+        final xfile = images[i];
+        final file = File(xfile.path);
+        final stat = await file.stat();
+        final fileName = _generateFileName(file, stat);
+        final paths =
+            await webdavService.uploadImageWithThumbnails(file, fileName);
+        final pathList = paths.split('|');
+        if (pathList.length >= 3) {
+          imagePaths.add(pathList[0]); // 原图
+          imageThumbnails.add(pathList[2]); // 小号缩略图
         } else {
-          final stat = await firstImage.stat();
-          date = stat.changed;
-          photoTimestampId = stat.changed.millisecondsSinceEpoch.toString();
+          imagePaths.add(paths);
+          imageThumbnails.add(paths); // 如果没有缩略图，使用原图
         }
-      } catch (e) {
-        final stat = await firstImage.stat();
-        date = stat.changed;
-        photoTimestampId = stat.changed.millisecondsSinceEpoch.toString();
+        onProgress?.call(i + 1, images.length);
       }
+
+      final entry = DiaryEntry(
+        id: overrideDate.millisecondsSinceEpoch.toString(),
+        date: overrideDate,
+        title: description,
+        description: description,
+        imagePaths: imagePaths,
+        videoPaths: [],
+        imageThumbnails: imageThumbnails,
+        videoThumbnails: [],
+        ageInMonths: _calculateAgeInMonths(overrideDate, config),
+      );
+
+      await webdavService.saveDiaryEntry(entry);
+      return [entry];
     }
 
-    // 上传图片
-    final List<String> imagePaths = [];
-    final List<String> imageThumbnails = [];
+    // 按日期分组图片
+    final Map<String, List<Map<String, dynamic>>> dateGroups = {};
+
     for (var i = 0; i < images.length; i++) {
       final xfile = images[i];
       final file = File(xfile.path);
-      final stat = await file.stat();
-      final fileName = _generateFileName(file, stat);
-      final paths =
-          await webdavService.uploadImageWithThumbnails(file, fileName);
-      final pathList = paths.split('|');
-      if (pathList.length >= 3) {
-        imagePaths.add(pathList[0]); // 原图
-        imageThumbnails.add(pathList[2]); // 小号缩略图
-      } else {
-        imagePaths.add(paths);
-        imageThumbnails.add(paths); // 如果没有缩略图，使用原图
+
+      // 提取图片日期
+      DateTime imageDate = DateTime.now();
+      try {
+        final exifData = await readExifFromBytes(await file.readAsBytes());
+        final dateTimeOriginal = exifData['EXIF DateTimeOriginal'];
+        final imageDateTime = exifData['Image DateTime'];
+        if (dateTimeOriginal != null) {
+          imageDate = _parseExifDate(dateTimeOriginal.toString());
+        } else if (imageDateTime != null) {
+          imageDate = _parseExifDate(imageDateTime.toString());
+        } else {
+          final stat = await file.stat();
+          imageDate = stat.changed;
+        }
+      } catch (e) {
+        final stat = await file.stat();
+        imageDate = stat.changed;
       }
-      onProgress?.call(i + 1, images.length);
+
+      // 使用日期的YYYY-MM-DD格式作为分组键
+      final dateKey =
+          '${imageDate.year}-${imageDate.month.toString().padLeft(2, '0')}-${imageDate.day.toString().padLeft(2, '0')}';
+
+      if (!dateGroups.containsKey(dateKey)) {
+        dateGroups[dateKey] = [];
+      }
+
+      dateGroups[dateKey]!.add({
+        'file': file,
+        'date': imageDate,
+        'index': i,
+      });
     }
 
-    // 生成标题
-    String title = description;
+    // 为每个日期组创建entry
+    final List<DiaryEntry> entries = [];
+    int totalProcessed = 0;
 
-    final entry = DiaryEntry(
-      id: photoTimestampId,
-      date: date,
-      title: title,
-      description: description,
-      imagePaths: imagePaths,
-      videoPaths: [],
-      imageThumbnails: imageThumbnails,
-      videoThumbnails: [],
-      ageInMonths: _calculateAgeInMonths(date, config),
-    );
+    for (final dateKey in dateGroups.keys) {
+      final imageDataList = dateGroups[dateKey]!;
+      final List<String> imagePaths = [];
+      final List<String> imageThumbnails = [];
 
-    await webdavService.saveDiaryEntry(entry);
+      // 使用该组第一张图片的日期作为entry日期
+      final entryDate = imageDataList.first['date'] as DateTime;
+      final photoTimestampId = entryDate.millisecondsSinceEpoch.toString();
 
-    return entry;
+      // 上传该组的所有图片
+      for (final imageData in imageDataList) {
+        final file = imageData['file'] as File;
+        final stat = await file.stat();
+        final fileName = _generateFileName(file, stat);
+        final paths =
+            await webdavService.uploadImageWithThumbnails(file, fileName);
+        final pathList = paths.split('|');
+        if (pathList.length >= 3) {
+          imagePaths.add(pathList[0]); // 原图
+          imageThumbnails.add(pathList[2]); // 小号缩略图
+        } else {
+          imagePaths.add(paths);
+          imageThumbnails.add(paths); // 如果没有缩略图，使用原图
+        }
+
+        totalProcessed++;
+        onProgress?.call(totalProcessed, images.length);
+      }
+
+      final entry = DiaryEntry(
+        id: photoTimestampId,
+        date: entryDate,
+        title: description,
+        description: description,
+        imagePaths: imagePaths,
+        videoPaths: [],
+        imageThumbnails: imageThumbnails,
+        videoThumbnails: [],
+        ageInMonths: _calculateAgeInMonths(entryDate, config),
+      );
+
+      await webdavService.saveDiaryEntry(entry);
+      entries.add(entry);
+    }
+
+    return entries;
   }
 
-  Future<DiaryEntry> createVideoEntry(
+  Future<List<DiaryEntry>> createVideoEntry(
       XFile video, String description, AppConfig config,
       [UploadProgressCallback? onProgress, DateTime? overrideDate]) async {
     // 确定记录日期
@@ -166,13 +227,10 @@ class EntryCreationService {
 
     onProgress?.call(1, 1);
 
-    // 生成标题
-    String title = description;
-
     final entry = DiaryEntry(
       id: videoTimestampId,
       date: date,
-      title: title,
+      title: description,
       description: description,
       imagePaths: [],
       videoPaths: [uploadedPath],
@@ -183,7 +241,7 @@ class EntryCreationService {
 
     await webdavService.saveDiaryEntry(entry);
 
-    return entry;
+    return [entry];
   }
 
   Future<DiaryEntry> createDiaryEntry(
