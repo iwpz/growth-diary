@@ -4,6 +4,7 @@ import 'screens/home_screen.dart';
 import 'screens/setup_screen.dart';
 import 'services/local_storage_service.dart';
 import 'services/webdav_service.dart';
+import 'services/background_upload_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -57,6 +58,14 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initializeApp() async {
+    try {
+      // Initialize WorkManager first
+      await BackgroundUploadService.initialize();
+    } catch (e) {
+      // WorkManager initialization failed, but don't block app startup
+      print('WorkManager initialization failed: $e');
+    }
+
     // Load config from local storage
     final config = await _localStorage.loadConfig();
 

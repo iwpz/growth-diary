@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'dart:io';
+import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/webdav_service.dart';
-import '../services/entry_creation_service.dart';
+import '../services/background_upload_service.dart';
 import '../utils/age_calculator.dart';
 import 'entry_detail_screen.dart';
 import 'settings_screen.dart';
@@ -26,7 +27,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<DiaryEntry> _entries = [];
   bool _isLoading = true;
   bool _isLoadingMore = false;
@@ -35,14 +36,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final Map<String, Future<Uint8List?>> _thumbnailFutures = {};
   bool _isExpanded = false;
   final ImagePicker _picker = ImagePicker();
-  late final EntryCreationService _entryService;
-  bool _isUploading = false;
-  int _totalFiles = 0;
-  int _uploadedFiles = 0;
 
   late AppConfig config;
   final ScrollController _scrollController = ScrollController();
   static const int _pageSize = 10;
+
+  // 上传进度相关状态
+  Timer? _uploadProgressTimer;
+  int _progressUpdateCounter = 0; // 用于强制更新UI
 
   DateTime _parseExifDate(String exifDate) {
     // EXIF日期格式: "YYYY:MM:DD HH:MM:SS"
@@ -69,15 +70,47 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     config = widget.config;
-    _entryService = EntryCreationService(widget.webdavService);
     _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addObserver(this);
+
+    // 设置上传完成回调，用于刷新首页内容
+    BackgroundUploadService.setUploadCompletedCallback(_onUploadCompleted);
+
+    // 设置上传进度更新回调，用于实时更新UI
+    BackgroundUploadService.setUploadProgressCallback(_onUploadProgressUpdated);
+
+    // 启动上传进度监控
+    _startUploadProgressMonitoring();
+
     _loadEntries();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _stopUploadProgressMonitoring();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    switch (state) {
+      case AppLifecycleState.paused:
+        // 应用进入后台时，显示通知提醒用户有上传任务正在进行
+        _showBackgroundUploadNotification();
+        break;
+      case AppLifecycleState.resumed:
+        // 应用回到前台时，检查是否有未完成的上传
+        _checkPendingUploads();
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        break;
+    }
   }
 
   Future<void> _loadEntries() async {
@@ -286,30 +319,30 @@ class _HomeScreenState extends State<HomeScreen> {
         if (description == null) return;
       }
 
-      setState(() {
-        _isUploading = true;
-        _totalFiles = images.length;
-        _uploadedFiles = 0;
-      });
+      // 获取文件路径
+      final mediaPaths = images.map((xfile) => xfile.path).toList();
 
-      await _entryService.createImageEntry(images, description, config,
-          (uploaded, total) {
-        setState(() {
-          _uploadedFiles = uploaded;
-        });
-      }, selectedDate);
+      // 启动后台上传
+      await BackgroundUploadService.startBackgroundUpload(
+        mediaPaths: mediaPaths,
+        description: description,
+        config: config,
+        overrideDate: selectedDate,
+      );
 
-      setState(() {
-        _isUploading = false;
-      });
+      // 立即更新上传进度显示
+      _updateUploadProgress();
 
-      _loadEntries();
-    } catch (e) {
-      setState(() {
-        _isUploading = false;
-      });
+      // 显示提示信息
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('添加图片记录失败: $e')),
+        const SnackBar(content: Text('已添加到后台上传队列，请查看通知栏了解进度')),
+      );
+
+      // 不需要重新加载entries，因为后台上传完成后不会自动刷新
+      // 用户可以手动刷新或等待下次进入应用时看到新内容
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('启动后台上传失败: $e')),
       );
     }
   }
@@ -348,30 +381,24 @@ class _HomeScreenState extends State<HomeScreen> {
         if (description == null) return;
       }
 
-      setState(() {
-        _isUploading = true;
-        _totalFiles = 1;
-        _uploadedFiles = 0;
-      });
+      // 启动后台上传
+      await BackgroundUploadService.startBackgroundUpload(
+        mediaPaths: [video.path],
+        description: description,
+        config: config,
+        overrideDate: selectedDate,
+      );
 
-      await _entryService.createVideoEntry(video, description, config,
-          (uploaded, total) {
-        setState(() {
-          _uploadedFiles = uploaded;
-        });
-      }, selectedDate);
+      // 立即更新上传进度显示
+      _updateUploadProgress();
 
-      setState(() {
-        _isUploading = false;
-      });
-
-      _loadEntries();
-    } catch (e) {
-      setState(() {
-        _isUploading = false;
-      });
+      // 显示提示信息
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('添加视频记录失败: $e')),
+        const SnackBar(content: Text('已添加到后台上传队列，请查看通知栏了解进度')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('启动后台上传失败: $e')),
       );
     }
   }
@@ -390,45 +417,133 @@ class _HomeScreenState extends State<HomeScreen> {
     ).then((_) => _loadEntries());
   }
 
+  void _showBackgroundUploadNotification() {
+    // 检查是否有活跃的上传任务
+    if (BackgroundUploadService.hasActiveUploads()) {
+      // 显示一个持续的通知，提醒用户有上传任务正在后台进行
+      BackgroundUploadService.showBackgroundNotification(
+        '成长日记上传中',
+        '应用已切换到后台，上传任务将继续进行',
+      );
+    }
+  }
+
+  void _checkPendingUploads() {
+    // 应用回到前台时，检查是否有未完成的上传
+    // 这里可以添加恢复上传状态的逻辑
+    // 目前由于我们使用的是异步上传，状态不会自动恢复
+    // 但我们可以显示一个提示，让用户知道之前的上传可能已被中断
+  }
+
+  void _onUploadCompleted() {
+    // 上传完成时刷新首页内容
+    if (mounted) {
+      _loadEntries();
+      _updateUploadProgress(); // 更新进度显示
+    }
+  }
+
+  void _onUploadProgressUpdated() {
+    // 上传进度更新时，实时更新UI
+    if (mounted) {
+      _updateUploadProgress();
+    }
+  }
+
+  void _startUploadProgressMonitoring() {
+    // 启动上传进度监控，每秒更新一次
+    _uploadProgressTimer?.cancel();
+    _uploadProgressTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _updateUploadProgress();
+    });
+    _updateUploadProgress(); // 立即更新一次
+  }
+
+  void _stopUploadProgressMonitoring() {
+    // 停止上传进度监控
+    _uploadProgressTimer?.cancel();
+    _uploadProgressTimer = null;
+    setState(() {
+      _progressUpdateCounter = 0; // 重置计数器
+    });
+  }
+
+  void _updateUploadProgress() {
+    if (!mounted) return;
+
+    final allTasks = BackgroundUploadService.getAllUploadTasks();
+
+    final activeTasks = allTasks
+        .where((task) => task.status == UploadStatus.uploading)
+        .toList();
+
+    setState(() {
+      _progressUpdateCounter++; // 强制UI更新
+    });
+
+    // 如果没有活跃任务，停止监控
+    if (activeTasks.isEmpty) {
+      _stopUploadProgressMonitoring();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // 直接从服务获取最新的上传任务状态
+    final allTasks = BackgroundUploadService.getAllUploadTasks();
+    final activeTasks = allTasks
+        .where((task) => task.status == UploadStatus.uploading)
+        .toList();
+
+    // 计算当前上传进度
+    int totalUploadFiles = 0;
+    int uploadedFilesCount = 0;
+    for (final task in activeTasks) {
+      totalUploadFiles += task.mediaPaths.length;
+      uploadedFilesCount += task.uploadedCount;
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onDoubleTap: () {
-                  _scrollController.animateTo(
-                    0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOut,
-                  );
-                },
-                child: Text('${config.childName}的成长日记'),
-              ),
-            ),
-            if (_isUploading) ...[
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor:
-                      AlwaysStoppedAnimation<Color>(Colors.pink.shade300),
+        title: GestureDetector(
+          onDoubleTap: () {
+            _scrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  '${config.childName}的成长日记',
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                '$_uploadedFiles/$_totalFiles',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.black87,
+              if (activeTasks.isNotEmpty) ...[
+                const SizedBox(width: 12),
+                Text(
+                  '$uploadedFilesCount/$totalUploadFiles',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.pink,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.pink),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -687,7 +802,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Add the entry
       final isFirst = i == 0;
-      final isLast = i == sortedEntries.length - 1;
+      final isLast = i == sortedEntries.length - 1 && hasPregnancyEntries;
       final isFirstInGroup = entryGroupKey !=
           (i > 0 ? sortedEntries[i - 1].getGroupKey(config) : null);
       final isLastInGroup = i == sortedEntries.length - 1 ||
