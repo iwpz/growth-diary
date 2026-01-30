@@ -39,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isUploading = false;
   int _totalFiles = 0;
   int _uploadedFiles = 0;
-  String _uploadMessage = '';
 
   late AppConfig config;
   final ScrollController _scrollController = ScrollController();
@@ -291,7 +290,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _isUploading = true;
         _totalFiles = images.length;
         _uploadedFiles = 0;
-        _uploadMessage = '正在上传图片...';
       });
 
       await _entryService.createImageEntry(images, description, config,
@@ -354,7 +352,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _isUploading = true;
         _totalFiles = 1;
         _uploadedFiles = 0;
-        _uploadMessage = '正在上传视频...';
       });
 
       await _entryService.createVideoEntry(video, description, config,
@@ -397,15 +394,41 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: GestureDetector(
-          onDoubleTap: () {
-            _scrollController.animateTo(
-              0,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
-          },
-          child: Text('${config.childName}的成长日记'),
+        title: Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onDoubleTap: () {
+                  _scrollController.animateTo(
+                    0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                },
+                child: Text('${config.childName}的成长日记'),
+              ),
+            ),
+            if (_isUploading) ...[
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(Colors.pink.shade300),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$_uploadedFiles/$_totalFiles',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ],
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -434,27 +457,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Stack(
         children: [
-          if (_isUploading)
-            Container(
-              color: Colors.black.withValues(alpha: 0.5),
-              child: Center(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const CircularProgressIndicator(),
-                        const SizedBox(height: 16),
-                        Text(_uploadMessage),
-                        Text('$_uploadedFiles / $_totalFiles'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            )
-          else if (_isLoading)
+          if (_isLoading)
             const Center(child: CircularProgressIndicator())
           else if (_entries.isEmpty)
             _buildEmptyState()
