@@ -29,6 +29,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<DiaryEntry> _entries = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMoreData = true;
   final Map<String, Uint8List?> _thumbnailCache = {};
   final Map<String, Future<Uint8List?>> _thumbnailFutures = {};
   bool _isExpanded = false;
@@ -40,6 +42,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _uploadMessage = '';
 
   late AppConfig config;
+  final ScrollController _scrollController = ScrollController();
+  static const int _pageSize = 10;
 
   DateTime _parseExifDate(String exifDate) {
     // EXIF日期格式: "YYYY:MM:DD HH:MM:SS"
@@ -67,19 +71,29 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     config = widget.config;
     _entryService = EntryCreationService(widget.webdavService);
+    _scrollController.addListener(_onScroll);
     _loadEntries();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadEntries() async {
     setState(() {
       _isLoading = true;
+      _entries.clear();
+      _hasMoreData = true;
     });
 
     try {
-      final entries = await widget.webdavService.loadAllEntries();
+      final entries = await widget.webdavService.loadEntriesPage(0, _pageSize);
       setState(() {
         _entries = entries;
         _isLoading = false;
+        _hasMoreData = entries.length == _pageSize;
       });
     } catch (e) {
       setState(() {
@@ -90,6 +104,40 @@ class _HomeScreenState extends State<HomeScreen> {
           SnackBar(content: Text('加载失败: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _loadMoreEntries() async {
+    if (_isLoadingMore || !_hasMoreData) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final newEntries = await widget.webdavService
+          .loadEntriesPage(_entries.length, _pageSize);
+      setState(() {
+        _entries.addAll(newEntries);
+        _isLoadingMore = false;
+        _hasMoreData = newEntries.length == _pageSize;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingMore = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载更多失败: $e')),
+        );
+      }
+    }
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMoreEntries();
     }
   }
 
@@ -349,7 +397,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('${config.childName}的成长日记'),
+        title: GestureDetector(
+          onDoubleTap: () {
+            _scrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          },
+          child: Text('${config.childName}的成长日记'),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.black,
@@ -501,48 +558,164 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTimeline() {
-    int preBirthItemCount = _getPreBirthItemCount();
-    bool hasPreBirth = preBirthItemCount > 0;
-    int postBirthItemCount = _getPostBirthItemCount();
-    bool showPregnancyLabel =
-        config.childBirthDate == null && config.conceptionDate != null;
+    if (_entries.isEmpty && !_isLoading) {
+      return _buildEmptyState();
+    }
+
+    // Sort entries by date descending
+    final sortedEntries = List<DiaryEntry>.from(_entries)
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    // Build items list with special labels inserted dynamically
+    final items = <Widget>[];
+
+    // Always add current month separator at the top
+    items.add(_buildCurrentMonthSeparator());
+
+    // Check if the latest entry is not in current month, add its month separator
+    if (sortedEntries.isNotEmpty) {
+      final latestEntry = sortedEntries.first;
+      final currentDate = DateTime.now();
+      final birthDate = config.childBirthDate;
+      if (birthDate != null) {
+        final currentAgeInMonths =
+            AgeCalculator.calculateAgeInMonths(birthDate, currentDate);
+        final latestEntryGroupKey = latestEntry.getGroupKey(config);
+
+        // If latest entry is not in current month, add its month separator
+        if (latestEntryGroupKey != currentAgeInMonths) {
+          final isPregnancyPeriod = config.conceptionDate != null &&
+              latestEntry.date.isBefore(birthDate);
+          items.add(_buildGroupSeparator(
+              latestEntry, false, false, isPregnancyPeriod, config));
+        }
+      }
+    }
+
+    // Find insertion points for special labels
+    DateTime? birthDate = config.childBirthDate;
+    DateTime? conceptionDate = config.conceptionDate;
+
+    // Track if we've inserted special labels
+    bool hasInsertedBirthLabel = false;
+    bool hasInsertedConceptionLabel = false;
+
+    // Pre-scan to find the first post-birth entry and last post-birth entry
+    int? firstPostBirthIndex;
+    int? lastPostBirthIndex;
+    bool hasPreBirthEntries = false;
+
+    for (int i = 0; i < sortedEntries.length; i++) {
+      if (birthDate != null) {
+        if (sortedEntries[i].date.isBefore(birthDate)) {
+          hasPreBirthEntries = true;
+        } else {
+          firstPostBirthIndex ??= i;
+          lastPostBirthIndex = i; // Keep updating to get the last one
+        }
+      }
+    }
+
+    int? currentGroupKey;
+    bool isFirstGroup = true;
+    int? latestEntryGroupKey;
+
+    // Get the latest entry's group key if we already added its separator
+    if (sortedEntries.isNotEmpty) {
+      final latestEntry = sortedEntries.first;
+      final currentDate = DateTime.now();
+      final birthDate = config.childBirthDate;
+      if (birthDate != null) {
+        final currentAgeInMonths =
+            AgeCalculator.calculateAgeInMonths(birthDate, currentDate);
+        latestEntryGroupKey = latestEntry.getGroupKey(config);
+        // If we added the latest entry's month separator above, mark it as already handled
+        if (latestEntryGroupKey != currentAgeInMonths) {
+          currentGroupKey = latestEntryGroupKey;
+          isFirstGroup = false;
+        }
+      }
+    }
+
+    for (int i = 0; i < sortedEntries.length; i++) {
+      final entry = sortedEntries[i];
+      final entryGroupKey = entry.getGroupKey(config);
+
+      // Check if we need to insert group separator
+      if (currentGroupKey != entryGroupKey) {
+        if (currentGroupKey != null) {
+          // This is not the first group, add separator before this group
+          final isPregnancyPeriod = config.conceptionDate != null &&
+              entry.date.isBefore(birthDate ?? DateTime.now());
+          // Check if this is the last group
+          bool isLastGroup = true;
+          for (int j = i; j < sortedEntries.length; j++) {
+            if (sortedEntries[j].getGroupKey(config) != entryGroupKey) {
+              isLastGroup = false;
+              break;
+            }
+          }
+          items.add(_buildGroupSeparator(
+              entry, isFirstGroup, isLastGroup, isPregnancyPeriod, config));
+          isFirstGroup = false;
+        }
+        currentGroupKey = entryGroupKey;
+      }
+
+      // Check if we need to insert conception label before this entry
+      if (conceptionDate != null &&
+          !hasInsertedConceptionLabel &&
+          entry.date.isBefore(conceptionDate) &&
+          (i == 0 || sortedEntries[i - 1].date.isAfter(conceptionDate))) {
+        items.add(_buildPregnancyLabel());
+        hasInsertedConceptionLabel = true;
+      }
+
+      // Add the entry
+      final isFirst = i == 0;
+      final isLast = i == sortedEntries.length - 1;
+      final isFirstInGroup = entryGroupKey !=
+          (i > 0 ? sortedEntries[i - 1].getGroupKey(config) : null);
+      final isLastInGroup = i == sortedEntries.length - 1 ||
+          entryGroupKey != sortedEntries[i + 1].getGroupKey(config);
+
+      items.add(_buildTimelineItem(entry, isFirst, isLast, isFirstInGroup,
+          isLastInGroup && conceptionDate == null));
+
+      // Check if we need to insert birth label after the last post-birth entry
+      if (birthDate != null &&
+          !hasInsertedBirthLabel &&
+          hasPreBirthEntries &&
+          lastPostBirthIndex != null &&
+          i == lastPostBirthIndex) {
+        items.add(_buildBirthDateLabel(showBottomLine: true));
+        hasInsertedBirthLabel = true;
+      }
+    }
+
+    // Add special labels at the end if not inserted yet
+    if (conceptionDate != null && !hasInsertedConceptionLabel) {
+      items.add(_buildPregnancyLabel());
+    }
+    if (birthDate != null && !hasInsertedBirthLabel) {
+      items.add(_buildBirthDateLabel(showBottomLine: false));
+    }
+
+    // Add loading indicator if loading more
+    if (_isLoadingMore) {
+      items.add(const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(child: CircularProgressIndicator()),
+      ));
+    }
 
     return RefreshIndicator(
       onRefresh: _loadEntries,
       child: ListView.builder(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
-        itemCount: 1 +
-            postBirthItemCount +
-            1 +
-            preBirthItemCount +
-            (showPregnancyLabel
-                ? 1
-                : 0), // current month + post + birth label + pre + pregnancy label
-        itemBuilder: (context, index) {
-          if (index == 0) return _buildCurrentMonthSeparator();
-          index -= 1;
-
-          if (index < postBirthItemCount) {
-            return _buildPostBirthItemAtIndex(index);
-          }
-          index -= postBirthItemCount;
-
-          if (index == 0) {
-            return _buildBirthDateLabel(showBottomLine: hasPreBirth);
-          }
-          index -= 1;
-
-          if (index < preBirthItemCount) {
-            return _buildPreBirthItemAtIndex(index);
-          }
-          index -= preBirthItemCount;
-
-          if (showPregnancyLabel && index == 0) {
-            return _buildPregnancyLabel();
-          }
-
-          return Container(); // shouldn't reach
-        },
+        itemCount: items.length,
+        itemBuilder: (context, index) => items[index],
       ),
     );
   }
@@ -1161,134 +1334,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
     );
-  }
-
-  int _getItemCountForEntries(List<DiaryEntry> entries,
-      bool skipCurrentMonthSeparator, AppConfig config) {
-    if (entries.isEmpty) return 0;
-
-    final groupGroups = <int, List<DiaryEntry>>{};
-    for (final entry in entries) {
-      final groupKey = entry.getGroupKey(config);
-      groupGroups.putIfAbsent(groupKey, () => []).add(entry);
-    }
-
-    final sortedGroups = groupGroups.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
-
-    final currentDate = DateTime.now();
-    final birthDate = config.childBirthDate;
-    final currentGroup =
-        birthDate != null && !entries.any((e) => e.date.isBefore(birthDate))
-            ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
-            : null;
-
-    int count = 0;
-    int groupIndex = 0;
-    for (final group in sortedGroups) {
-      final entriesInGroup = groupGroups[group]!;
-      final isFirstGroup = groupIndex == 0;
-      final skipSeparator =
-          skipCurrentMonthSeparator && isFirstGroup && group == currentGroup;
-      if (!skipSeparator) {
-        count += 1; // separator
-      }
-      count += entriesInGroup.length;
-      groupIndex++;
-    }
-
-    return count;
-  }
-
-  int _getPreBirthItemCount() {
-    final birthDate = config.childBirthDate;
-    if (birthDate == null) return 0;
-    final preBirthEntries =
-        _entries.where((e) => e.date.isBefore(birthDate)).toList();
-    return _getItemCountForEntries(preBirthEntries, false, config);
-  }
-
-  int _getPostBirthItemCount() {
-    final birthDate = config.childBirthDate;
-    final postBirthEntries = _entries
-        .where((e) => birthDate == null || !e.date.isBefore(birthDate))
-        .toList();
-    return _getItemCountForEntries(postBirthEntries, true, config);
-  }
-
-  Widget _buildItemAtIndexForEntries(List<DiaryEntry> entries, int index,
-      bool skipCurrentMonthSeparator, AppConfig config) {
-    final groupGroups = <int, List<DiaryEntry>>{};
-    for (final entry in entries) {
-      final groupKey = entry.getGroupKey(config);
-      groupGroups.putIfAbsent(groupKey, () => []).add(entry);
-    }
-
-    final sortedGroups = groupGroups.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
-
-    final currentDate = DateTime.now();
-    final birthDate = config.childBirthDate;
-    final currentGroup =
-        birthDate != null && !entries.any((e) => e.date.isBefore(birthDate))
-            ? AgeCalculator.calculateAgeInMonths(birthDate, currentDate)
-            : null;
-
-    int currentIndex = 0;
-    int groupIndex = 0;
-
-    for (final group in sortedGroups) {
-      final entriesInGroup = groupGroups[group]!;
-      final isFirstGroup = groupIndex == 0;
-      final isLastGroup = groupIndex == sortedGroups.length - 1;
-      final skipSeparator =
-          skipCurrentMonthSeparator && isFirstGroup && group == currentGroup;
-
-      if (!skipSeparator) {
-        if (currentIndex == index) {
-          final isPregnancyPeriod = config.conceptionDate != null &&
-              entriesInGroup.first.date.isBefore(birthDate ?? DateTime.now());
-          return _buildGroupSeparator(entriesInGroup.first, isFirstGroup,
-              isLastGroup, isPregnancyPeriod, config);
-        }
-        currentIndex++;
-      }
-      groupIndex++;
-
-      for (final entry in entriesInGroup) {
-        if (currentIndex == index) {
-          final entryIndex = entries.indexOf(entry);
-          final isFirst = entryIndex == 0;
-          final isLast = entryIndex == entries.length - 1 &&
-              entry.date.isBefore(birthDate ?? DateTime.now());
-          final isFirstInGroup = entriesInGroup.first == entry;
-          final isLastInGroup = entriesInGroup.last == entry;
-
-          return _buildTimelineItem(entry, isFirst, isLast, isFirstInGroup,
-              isLastInGroup && config.childBirthDate != null);
-        }
-        currentIndex++;
-      }
-    }
-
-    return const SizedBox.shrink();
-  }
-
-  Widget _buildPreBirthItemAtIndex(int index) {
-    final birthDate = config.childBirthDate!;
-    final preBirthEntries = _entries
-        .where((e) => e.date.isBefore(birthDate))
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
-    return _buildItemAtIndexForEntries(preBirthEntries, index, false, config);
-  }
-
-  Widget _buildPostBirthItemAtIndex(int index) {
-    final birthDate = config.childBirthDate;
-    final postBirthEntries = _entries
-        .where((e) => birthDate == null || !e.date.isBefore(birthDate))
-        .toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
-    return _buildItemAtIndexForEntries(postBirthEntries, index, true, config);
   }
 }

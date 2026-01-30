@@ -137,6 +137,47 @@ class WebDAVService {
     }
   }
 
+  Future<List<DiaryEntry>> loadEntriesPage(int offset, int limit) async {
+    if (_client == null || _id == null) return [];
+
+    try {
+      final files = await _client!.readDir(_getEntriesPath());
+      final jsonFiles = files
+          .where((file) => file.name != null && file.name!.endsWith('.json'))
+          .toList();
+
+      // Sort files by modification time descending (newest first)
+      jsonFiles.sort((a, b) {
+        final aTime = a.mTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = b.mTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+
+      final entries = <DiaryEntry>[];
+      final startIndex = offset;
+      final endIndex = (offset + limit).clamp(0, jsonFiles.length);
+
+      for (var i = startIndex; i < endIndex; i++) {
+        final file = jsonFiles[i];
+        try {
+          final content =
+              await _client!.read('${_getEntriesPath()}/${file.name}');
+          final jsonData = jsonDecode(utf8.decode(content));
+          entries.add(DiaryEntry.fromJson(jsonData));
+        } catch (e) {
+          debugPrint('Error loading entry ${file.name}: $e');
+        }
+      }
+
+      // Sort by date descending as final ordering
+      entries.sort((a, b) => b.date.compareTo(a.date));
+      return entries;
+    } catch (e) {
+      debugPrint('Error loading entries page: $e');
+      return [];
+    }
+  }
+
   Future<Uint8List?> downloadMedia(String path) async {
     if (_client == null) return null;
 
