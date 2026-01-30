@@ -741,12 +741,11 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             children: [
               // Top line (only if not first group)
-              if (!isFirstGroup)
-                Container(
-                  width: 2,
-                  height: 24,
-                  color: Colors.pink.shade200,
-                ),
+              Container(
+                width: 2,
+                height: 24,
+                color: Colors.pink.shade200,
+              ),
 
               // Group circle
               Container(
@@ -877,7 +876,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Content
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
+              padding: const EdgeInsets.only(bottom: 12),
               child: GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -1314,6 +1313,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
               color: Colors.pink.shade50,
               borderRadius: BorderRadius.circular(20),
