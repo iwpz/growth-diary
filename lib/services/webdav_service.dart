@@ -9,6 +9,18 @@ import '../models/app_config.dart';
 
 class WebDAVService {
   webdav.Client? _client;
+  String? _id;
+
+  String _getBasePath() => 'growth_diary/$_id';
+
+  String _getConfigPath() => '${_getBasePath()}/config.json';
+
+  String _getEntriesPath() => '${_getBasePath()}/entries';
+
+  String _getMediaPath(String fileName) => '${_getBasePath()}/media/$fileName';
+
+  String _getThumbnailsPath(String fileName) =>
+      '${_getBasePath()}/thumbnails/$fileName';
 
   Future<void> initialize(AppConfig config) async {
     if (config.webdavUrl.isNotEmpty && config.username.isNotEmpty) {
@@ -22,35 +34,44 @@ class WebDAVService {
       _client!.setSendTimeout(8000);
       _client!.setReceiveTimeout(8000);
 
+      _id = config.id;
+
       // Create base directories if they don't exist
+      final baseDir = _getBasePath();
       try {
-        await _client!.mkdir('growth_diary');
+        await _client!.mkdir(baseDir);
       } catch (e) {
         // Ignore if directory already exists (409 Conflict)
-        debugPrint('mkdir growth_diary: $e');
+        debugPrint('mkdir $baseDir: $e');
       }
       try {
-        await _client!.mkdir('growth_diary/entries');
+        await _client!.mkdir('${_getBasePath()}/entries');
       } catch (e) {
         // Ignore if directory already exists (409 Conflict)
-        debugPrint('mkdir growth_diary/entries: $e');
+        debugPrint('mkdir ${_getBasePath()}/entries: $e');
       }
       try {
-        await _client!.mkdir('growth_diary/media');
+        await _client!.mkdir('${_getBasePath()}/media');
       } catch (e) {
         // Ignore if directory already exists (409 Conflict)
-        debugPrint('mkdir growth_diary/media: $e');
+        debugPrint('mkdir ${_getBasePath()}/media: $e');
+      }
+      try {
+        await _client!.mkdir('${_getBasePath()}/thumbnails');
+      } catch (e) {
+        // Ignore if directory already exists (409 Conflict)
+        debugPrint('mkdir ${_getBasePath()}/thumbnails: $e');
       }
     }
   }
 
   Future<void> saveConfig(AppConfig config) async {
-    if (_client == null) return;
+    if (_client == null || _id == null) return;
 
     try {
       final jsonString = jsonEncode(config.toJson());
       await _client!.write(
-        'growth_diary/config.json',
+        _getConfigPath(),
         utf8.encode(jsonString),
       );
     } catch (e) {
@@ -60,10 +81,10 @@ class WebDAVService {
   }
 
   Future<AppConfig?> loadConfig() async {
-    if (_client == null) return null;
+    if (_client == null || _id == null) return null;
 
     try {
-      final content = await _client!.read('growth_diary/config.json');
+      final content = await _client!.read(_getConfigPath());
       final jsonData = jsonDecode(utf8.decode(content));
       return AppConfig.fromJson(jsonData);
     } catch (e) {
@@ -73,12 +94,12 @@ class WebDAVService {
   }
 
   Future<void> saveDiaryEntry(DiaryEntry entry) async {
-    if (_client == null) return;
+    if (_client == null || _id == null) return;
 
     try {
       final jsonString = jsonEncode(entry.toJson());
       await _client!.write(
-        'growth_diary/entries/${entry.id}.json',
+        '${_getEntriesPath()}/${entry.id}.json',
         utf8.encode(jsonString),
       );
     } catch (e) {
@@ -88,17 +109,17 @@ class WebDAVService {
   }
 
   Future<List<DiaryEntry>> loadAllEntries() async {
-    if (_client == null) return [];
+    if (_client == null || _id == null) return [];
 
     try {
-      final files = await _client!.readDir('growth_diary/entries');
+      final files = await _client!.readDir(_getEntriesPath());
       final entries = <DiaryEntry>[];
 
       for (var file in files) {
         if (file.name != null && file.name!.endsWith('.json')) {
           try {
             final content =
-                await _client!.read('growth_diary/entries/${file.name}');
+                await _client!.read('${_getEntriesPath()}/${file.name}');
             final jsonData = jsonDecode(utf8.decode(content));
             entries.add(DiaryEntry.fromJson(jsonData));
           } catch (e) {
@@ -120,7 +141,10 @@ class WebDAVService {
     if (_client == null) return null;
 
     try {
-      final data = await _client!.read(path);
+      // 如果路径不以 'growth_diary/' 开头，则认为是相对路径，需要拼接前缀
+      final fullPath =
+          path.startsWith('growth_diary/') ? path : '${_getBasePath()}/$path';
+      final data = await _client!.read(fullPath);
       return Uint8List.fromList(data);
     } catch (e) {
       debugPrint('Error downloading media: $e');
@@ -129,12 +153,14 @@ class WebDAVService {
   }
 
   Future<String> uploadMedia(File file, String fileName) async {
-    if (_client == null) throw Exception('WebDAV client not initialized');
+    if (_client == null || _id == null) {
+      throw Exception('WebDAV client not initialized');
+    }
 
     try {
-      final path = 'growth_diary/media/$fileName';
+      final path = _getMediaPath(fileName);
       await _client!.writeFromFile(file.path, path);
-      return path;
+      return 'media/$fileName'; // 返回相对路径
     } catch (e) {
       debugPrint('Error uploading media: $e');
       rethrow;
@@ -142,11 +168,13 @@ class WebDAVService {
   }
 
   Future<String> uploadImageWithThumbnails(File file, String fileName) async {
-    if (_client == null) throw Exception('WebDAV client not initialized');
+    if (_client == null || _id == null) {
+      throw Exception('WebDAV client not initialized');
+    }
 
     try {
       // 上传原图
-      final originalPath = 'growth_diary/media/$fileName';
+      final originalPath = _getMediaPath(fileName);
       await _client!.writeFromFile(file.path, originalPath);
 
       // 生成中号缩略图 (用于详情页)
@@ -155,20 +183,20 @@ class WebDAVService {
         final mediumThumbnail = img.copyResize(image, width: 400);
         final mediumData = img.encodeJpg(mediumThumbnail, quality: 85);
         final mediumFileName = '${fileName}_medium.jpg';
-        final mediumPath = 'growth_diary/media/$mediumFileName';
+        final mediumPath = _getThumbnailsPath(mediumFileName);
         await _client!.write(mediumPath, mediumData);
 
         // 生成小号缩略图 (用于时间轴)
         final smallThumbnail = img.copyResize(image, width: 200);
         final smallData = img.encodeJpg(smallThumbnail, quality: 80);
         final smallFileName = '${fileName}_small.jpg';
-        final smallPath = 'growth_diary/media/$smallFileName';
+        final smallPath = _getThumbnailsPath(smallFileName);
         await _client!.write(smallPath, smallData);
 
-        return '$originalPath|$mediumPath|$smallPath';
+        return 'media/$fileName|thumbnails/$mediumFileName|thumbnails/$smallFileName'; // 返回相对路径
       }
 
-      return originalPath;
+      return 'media/$fileName'; // 返回相对路径
     } catch (e) {
       debugPrint('Error uploading image with thumbnails: $e');
       rethrow;
@@ -176,11 +204,13 @@ class WebDAVService {
   }
 
   Future<String> uploadVideoWithThumbnails(File file, String fileName) async {
-    if (_client == null) throw Exception('WebDAV client not initialized');
+    if (_client == null || _id == null) {
+      throw Exception('WebDAV client not initialized');
+    }
 
     try {
       // 上传原视频
-      final originalPath = 'growth_diary/media/$fileName';
+      final originalPath = _getMediaPath(fileName);
       await _client!.writeFromFile(file.path, originalPath);
 
       // 生成缩略图
@@ -204,7 +234,7 @@ class WebDAVService {
       }
 
       final mediumFileName = '${fileName}_medium.jpg';
-      final mediumPath = 'growth_diary/media/$mediumFileName';
+      final mediumPath = _getThumbnailsPath(mediumFileName);
       await _client!.write(mediumPath, thumbnail);
 
       // 生成小号缩略图
@@ -213,13 +243,13 @@ class WebDAVService {
         final smallThumbnail = img.copyResize(image, width: 200);
         final smallData = img.encodeJpg(smallThumbnail, quality: 70);
         final smallFileName = '${fileName}_small.jpg';
-        final smallPath = 'growth_diary/media/$smallFileName';
+        final smallPath = _getThumbnailsPath(smallFileName);
         await _client!.write(smallPath, smallData);
 
-        return '$originalPath|$mediumPath|$smallPath';
+        return 'media/$fileName|thumbnails/$mediumFileName|thumbnails/$smallFileName'; // 返回相对路径
       }
 
-      return originalPath;
+      return 'media/$fileName'; // 返回相对路径
     } catch (e) {
       debugPrint('Error uploading video with thumbnails: $e');
       rethrow;
@@ -227,7 +257,7 @@ class WebDAVService {
   }
 
   Future<void> deleteEntry(DiaryEntry entry) async {
-    if (_client == null) return;
+    if (_client == null || _id == null) return;
 
     try {
       // 删除所有相关的媒体文件
@@ -240,8 +270,10 @@ class WebDAVService {
 
       for (final path in allMediaPaths) {
         try {
-          await _client!.remove(path);
-          debugPrint('Deleted media file: $path');
+          // 如果路径不以 'growth_diary/' 开头，则认为是相对路径，需要拼接前缀
+          final fullPath = '${_getBasePath()}/$path';
+          await _client!.remove(fullPath);
+          debugPrint('Deleted media file: $fullPath');
         } catch (e) {
           debugPrint('Error deleting media file $path: $e');
           // 继续删除其他文件，即使某个文件删除失败
@@ -249,7 +281,7 @@ class WebDAVService {
       }
 
       // 删除条目JSON文件
-      await _client!.remove('growth_diary/entries/${entry.id}.json');
+      await _client!.remove('${_getEntriesPath()}/${entry.id}.json');
       debugPrint('Deleted entry: ${entry.id}');
     } catch (e) {
       debugPrint('Error deleting entry: $e');

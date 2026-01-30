@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:webdav_client/webdav_client.dart' as webdav;
 import '../models/app_config.dart';
 import '../services/webdav_service.dart';
 import '../services/local_storage_service.dart';
 import 'setup_screen.dart';
-import 'home_screen.dart';
+import 'webdav_config_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AppConfig config;
@@ -115,183 +113,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _testWebDAVConnection(
-      String url, String username, String password) async {
-    if (url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入 WebDAV URL')),
-      );
-      return;
-    }
-
-    try {
-      final client = webdav.newClient(
-        url,
-        user: username,
-        password: password,
-        debug: true,
-      );
-      client.setConnectTimeout(5000);
-      client.setSendTimeout(5000);
-      client.setReceiveTimeout(5000);
-
-      // 尝试 ping 服务器来测试连接
-      await client.ping();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('连接成功！')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('连接失败！请检查配置')),
-        );
-        print('WebDAV connection test failed: $e');
-      }
-    }
-  }
-
-  Future<void> _showWebDAVSettings() async {
-    String url = _config.webdavUrl;
-    String username = _config.username;
-    String password = _config.password;
-
-    final result = await showDialog<bool>(
+  Future<void> _resetConfiguration() async {
+    final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('WebDAV 配置'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: TextEditingController(text: url),
-                  onChanged: (value) => url = value,
-                  decoration: const InputDecoration(
-                    labelText: 'WebDAV URL',
-                    hintText: 'https://example.com/webdav',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: TextEditingController(text: username),
-                  onChanged: (value) => username = value,
-                  decoration: const InputDecoration(
-                    labelText: '用户名',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: TextEditingController(text: password),
-                  onChanged: (value) => password = value,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: '密码',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () async {
-                    await _testWebDAVConnection(url, username, password);
-                  },
-                  child: const Text('测试连接'),
-                ),
-              ],
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text('重新配置'),
+        content: const Text('这将清除当前配置并返回设置页面。确定继续吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('保存'),
-            ),
-          ],
-        ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确定'),
+          ),
+        ],
       ),
     );
 
-    if (result == true) {
-      // 检查是否有变化
-      if (url != _config.webdavUrl ||
-          username != _config.username ||
-          password != _config.password) {
-        // 确认修改
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('确认修改'),
-            content: const Text('修改 WebDAV 配置将迁移数据到新路径。确定继续吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('确定'),
-              ),
-            ],
+    if (confirm == true) {
+      await _localStorage.clearConfig();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (context) => const SetupScreen(),
           ),
+          (route) => false,
         );
-
-        if (confirm == true) {
-          // 更新配置
-          final updatedConfig = _config.copyWith(
-            webdavUrl: url,
-            username: username,
-            password: password,
-          );
-          await _localStorage.saveConfig(updatedConfig);
-
-          // 创建新的 WebDAV 客户端并保存配置到新路径
-          final newClient = webdav.newClient(
-            url,
-            user: username,
-            password: password,
-            debug: true,
-          );
-          newClient.setConnectTimeout(8000);
-          newClient.setSendTimeout(8000);
-          newClient.setReceiveTimeout(8000);
-
-          try {
-            // 创建目录
-            await newClient.mkdir('growth_diary');
-            // 保存配置
-            final configJson = jsonEncode(updatedConfig.toJson());
-            await newClient.write(
-                'growth_diary/config.json', utf8.encode(configJson));
-          } catch (e) {
-            // 如果保存失败，显示错误但仍继续
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('保存配置到新路径失败: $e')),
-              );
-            }
-          }
-
-          // 创建新的 WebDAV 服务并导航到 HomeScreen
-          final newWebDAVService = WebDAVService();
-          await newWebDAVService.initialize(updatedConfig);
-
-          if (mounted) {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(
-                builder: (context) => HomeScreen(
-                  config: updatedConfig,
-                  webdavService: newWebDAVService,
-                ),
-              ),
-              (route) => false,
-            );
-          }
-        }
       }
     }
   }
@@ -344,8 +193,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('WebDAV 配置'),
             subtitle:
                 Text('${widget.config.webdavUrl} (${widget.config.username})'),
-            trailing: const Icon(Icons.settings),
-            onTap: _showWebDAVSettings,
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => WebDAVConfigScreen(
+                    mode: WebDAVConfigMode.settings,
+                    config: _config,
+                    webdavService: widget.webdavService,
+                    onConfigChanged: widget.onConfigChanged,
+                  ),
+                ),
+              ).then((_) {
+                // 刷新配置
+                setState(() {});
+              });
+            },
           ),
           const Divider(),
           _buildSection('应用'),
@@ -357,37 +221,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.edit, color: Colors.blue),
             title: const Text('重新配置'),
-            onTap: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('重新配置'),
-                  content: const Text('这将清除当前配置并返回设置页面。确定继续吗？'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('取消'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('确定'),
-                    ),
-                  ],
-                ),
-              );
-
-              if (confirm == true) {
-                await _localStorage.clearConfig();
-                if (mounted) {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (context) => const SetupScreen(),
-                    ),
-                    (route) => false,
-                  );
-                }
-              }
-            },
+            onTap: _resetConfiguration,
           ),
         ],
       ),

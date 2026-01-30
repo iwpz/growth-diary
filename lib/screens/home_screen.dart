@@ -13,10 +13,10 @@ import 'settings_screen.dart';
 import 'diary_editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  AppConfig config;
+  final AppConfig config;
   final WebDAVService webdavService;
 
-  HomeScreen({
+  const HomeScreen({
     super.key,
     required this.config,
     required this.webdavService,
@@ -504,6 +504,8 @@ class _HomeScreenState extends State<HomeScreen> {
     int preBirthItemCount = _getPreBirthItemCount();
     bool hasPreBirth = preBirthItemCount > 0;
     int postBirthItemCount = _getPostBirthItemCount();
+    bool showPregnancyLabel =
+        config.childBirthDate == null && config.conceptionDate != null;
 
     return RefreshIndicator(
       onRefresh: _loadEntries,
@@ -512,7 +514,10 @@ class _HomeScreenState extends State<HomeScreen> {
         itemCount: 1 +
             postBirthItemCount +
             1 +
-            preBirthItemCount, // current month + post + birth label + pre
+            preBirthItemCount +
+            (showPregnancyLabel
+                ? 1
+                : 0), // current month + post + birth label + pre + pregnancy label
         itemBuilder: (context, index) {
           if (index == 0) return _buildCurrentMonthSeparator();
           index -= 1;
@@ -522,11 +527,21 @@ class _HomeScreenState extends State<HomeScreen> {
           }
           index -= postBirthItemCount;
 
-          if (index == 0)
+          if (index == 0) {
             return _buildBirthDateLabel(showBottomLine: hasPreBirth);
+          }
           index -= 1;
 
-          return _buildPreBirthItemAtIndex(index);
+          if (index < preBirthItemCount) {
+            return _buildPreBirthItemAtIndex(index);
+          }
+          index -= preBirthItemCount;
+
+          if (showPregnancyLabel && index == 0) {
+            return _buildPregnancyLabel();
+          }
+
+          return Container(); // shouldn't reach
         },
       ),
     );
@@ -981,11 +996,80 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             child: Text(
-              '出生日期: ${birthDate.year}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}',
+              '宝宝来啦~ ${birthDate.year}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.blue.shade700,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPregnancyLabel() {
+    final conceptionDate = config.conceptionDate;
+    if (conceptionDate == null) return const SizedBox.shrink();
+
+    return Row(
+      children: [
+        // Timeline indicator for pregnancy
+        SizedBox(
+          width: 60,
+          child: Column(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [Colors.pink.shade300, Colors.pink.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.pink.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.pregnant_woman,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+              ),
+
+              // No bottom line for the last item
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        // Pregnancy label
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.pink.shade50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.pink.shade200,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              '怀孕啦！${conceptionDate.year}-${conceptionDate.month.toString().padLeft(2, '0')}-${conceptionDate.day.toString().padLeft(2, '0')}',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.pink.shade700,
               ),
             ),
           ),
@@ -1180,8 +1264,8 @@ class _HomeScreenState extends State<HomeScreen> {
           final isFirstInGroup = entriesInGroup.first == entry;
           final isLastInGroup = entriesInGroup.last == entry;
 
-          return _buildTimelineItem(
-              entry, isFirst, isLast, isFirstInGroup, isLastInGroup);
+          return _buildTimelineItem(entry, isFirst, isLast, isFirstInGroup,
+              isLastInGroup && config.childBirthDate != null);
         }
         currentIndex++;
       }

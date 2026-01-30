@@ -1,4 +1,7 @@
+import 'package:uuid/uuid.dart';
+
 class AppConfig {
+  String id;
   final String webdavUrl;
   final String username;
   final String password;
@@ -7,16 +10,22 @@ class AppConfig {
   final DateTime? conceptionDate;
 
   AppConfig({
+    this.id = '',
     this.webdavUrl = '',
     this.username = '',
     this.password = '',
     this.childBirthDate,
     this.childName = '',
     this.conceptionDate,
-  });
+  }) {
+    if (id.isEmpty) {
+      id = const Uuid().v4();
+    }
+  }
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'webdavUrl': webdavUrl,
       'username': username,
       'password': password,
@@ -28,6 +37,7 @@ class AppConfig {
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
     return AppConfig(
+      id: json['id'] ?? const Uuid().v4(),
       webdavUrl: json['webdavUrl'] ?? '',
       username: json['username'] ?? '',
       password: json['password'] ?? '',
@@ -48,6 +58,7 @@ class AppConfig {
   }
 
   AppConfig copyWith({
+    String? id,
     String? webdavUrl,
     String? username,
     String? password,
@@ -56,6 +67,7 @@ class AppConfig {
     DateTime? conceptionDate,
   }) {
     return AppConfig(
+      id: id ?? this.id,
       webdavUrl: webdavUrl ?? this.webdavUrl,
       username: username ?? this.username,
       password: password ?? this.password,
