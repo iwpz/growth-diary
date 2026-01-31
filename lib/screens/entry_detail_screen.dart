@@ -138,7 +138,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
     );
   }
 
-  Future<void> _editEntry() async {
+  Future<void> _editDate() async {
     final DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: widget.entry.date,
@@ -200,6 +200,70 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
     }
   }
 
+  Future<void> _editDescription() async {
+    final TextEditingController controller =
+        TextEditingController(text: widget.entry.description);
+
+    final String? newDescription = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('编辑描述'),
+        content: TextField(
+          controller: controller,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            hintText: '输入描述...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (newDescription != null && newDescription != widget.entry.description) {
+      try {
+        // 创建更新后的entry
+        final updatedEntry = DiaryEntry(
+          id: widget.entry.id,
+          title: widget.entry.title,
+          description: newDescription,
+          date: widget.entry.date,
+          imagePaths: widget.entry.imagePaths,
+          imageThumbnails: widget.entry.imageThumbnails,
+          videoPaths: widget.entry.videoPaths,
+          videoThumbnails: widget.entry.videoThumbnails,
+          ageInMonths: widget.entry.ageInMonths,
+        );
+
+        // 保存到WebDAV
+        await widget.cloudService.saveDiaryEntry(updatedEntry);
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('描述修改成功')),
+        );
+        // 返回上一页，让列表页面刷新
+        Navigator.pop(context, updatedEntry);
+      } catch (e) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('修改失败: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -210,8 +274,12 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
         foregroundColor: Colors.black,
         actions: [
           IconButton(
+            icon: const Icon(Icons.calendar_today),
+            onPressed: _editDate,
+          ),
+          IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: _editEntry,
+            onPressed: _editDescription,
           ),
           IconButton(
             icon: const Icon(Icons.delete),
@@ -315,15 +383,6 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
             ],
             if (widget.entry.imagePaths.isNotEmpty) ...[
               const SizedBox(height: 20),
-              const Text(
-                '照片',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 8),
               Text(
                 '${widget.entry.imagePaths.length} 张照片',
                 style: TextStyle(
@@ -379,15 +438,6 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
             ],
             if (widget.entry.videoPaths.isNotEmpty) ...[
               const SizedBox(height: 20),
-              const Text(
-                '视频',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 8),
               Text(
                 '${widget.entry.videoPaths.length} 个视频',
                 style: TextStyle(
