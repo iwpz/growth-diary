@@ -72,10 +72,11 @@ class DiaryEntry {
   int getGroupKey(AppConfig config) {
     if (config.conceptionDate != null &&
         date.isBefore(config.childBirthDate ?? DateTime.now())) {
-      return AgeCalculator.calculateWeeksSinceConception(
+      return AgeCalculator.calculateWeeksDifference(
           config.conceptionDate!, date);
     } else {
-      return ageInMonths;
+      return AgeCalculator.calculateDateDifference(
+          config.childBirthDate!, date)['months']!;
     }
   }
 }

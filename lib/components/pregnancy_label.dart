@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/app_config.dart';
 
 class PregnancyLabel extends StatelessWidget {
@@ -40,13 +41,6 @@ class PregnancyLabel extends StatelessWidget {
                   size: 30,
                 ),
               ),
-
-              // Bottom line
-              Container(
-                width: 2,
-                height: 24,
-                color: Colors.pink.shade200,
-              ),
             ],
           ),
         ),
@@ -65,7 +59,7 @@ class PregnancyLabel extends StatelessWidget {
               ),
             ),
             child: Text(
-              '孕期记录',
+              '怀孕啦！${DateFormat('yyyy年M月d日').format(config.conceptionDate!)}',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,

@@ -3,10 +3,68 @@ class AgeCalculator {
   /// 365.25 days/year ÷ 12 months ≈ 30.44 days/month
   static const double averageDaysPerMonth = 30.44;
 
+  /// Calculates the difference between two dates in years, months, and days
+  /// Returns a map with keys 'years', 'months', 'days'
+  static calculateDateDifference(DateTime start, DateTime end) {
+    // 确保 start 在 end 之前，如果不是则交换
+    if (start.isAfter(end)) {
+      DateTime temp = start;
+      start = end;
+      end = temp;
+    }
+
+    int years = end.year - start.year;
+    int months = end.month - start.month;
+    int days = end.day - start.day;
+
+    // 调整月份和天数
+    if (days < 0) {
+      months--;
+      // 获取前一个月的天数
+      int previousMonth = end.month - 1;
+      int previousYear = end.year;
+      if (previousMonth == 0) {
+        previousMonth = 12;
+        previousYear--;
+      }
+      days += DateTime(previousYear, previousMonth + 1, 0).day;
+    }
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    // 如果需要，可以返回一个 Map
+    return {
+      'years': years,
+      'months': months,
+      'days': days,
+    };
+  }
+
+  /// Calculates the difference in weeks between two dates
+  static int calculateWeeksDifference(DateTime start, DateTime end) {
+    // 确保 start 在 end 之前，如果不是则交换
+    if (start.isAfter(end)) {
+      DateTime temp = start;
+      start = end;
+      end = temp;
+    }
+
+    // 计算天数差异
+    int daysDifference = end.difference(start).inDays;
+
+    // 计算周数差异（向下取整）
+    int weeksDifference = daysDifference ~/ 7;
+
+    return weeksDifference;
+  }
+
   /// Calculates the age in months from birth date to the given date
   static int calculateAgeInMonths(DateTime birthDate, DateTime currentDate) {
     final diff = currentDate.difference(birthDate);
-    return (diff.inDays / averageDaysPerMonth).floor().toInt();
+    return (diff.inDays / averageDaysPerMonth).ceil().toInt();
   }
 
   /// Calculates the detailed age (years, months, days) from birth date to the given date
@@ -66,7 +124,7 @@ class AgeCalculator {
   /// Formats detailed age (years, months, days) to a human-readable Chinese label
   static String formatDetailedAgeLabel(
       DateTime birthDate, DateTime currentDate) {
-    final age = calculateDetailedAge(birthDate, currentDate);
+    final age = calculateDateDifference(birthDate, currentDate);
     final years = age['years']!;
     final months = age['months']!;
     final days = age['days']!;
@@ -82,23 +140,26 @@ class AgeCalculator {
     }
   }
 
-  /// Formats age to a simplified Chinese label (years and months only, no days)
+  /// Formats age to a simplified Chinese label (years, months and days)
   static String formatSimplifiedAgeLabel(
       DateTime birthDate, DateTime currentDate) {
     int ageInMonths = calculateAgeInMonths(birthDate, currentDate);
     if (ageInMonths < 0) {
       return '出生前 ${-ageInMonths} 月';
     }
-    final age = calculateDetailedAge(birthDate, currentDate);
+    final age = calculateDateDifference(birthDate, currentDate);
     final years = age['years']!;
     final months = age['months']!;
+    final days = age['days']!;
 
-    if (years == 0 && months == 0) {
+    if (years == 0 && months == 0 && days == 0) {
       return '出生';
+    } else if (years == 0 && months == 0) {
+      return '$days天';
     } else if (years == 0) {
-      return '$months个月';
+      return '$months个月$days天';
     } else {
-      return '$years岁$months个月';
+      return '$years岁$months个月$days天';
     }
   }
 

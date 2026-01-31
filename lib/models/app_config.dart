@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import '../utils/age_calculator.dart';
 
 class Baby {
   String id;
@@ -42,25 +43,15 @@ class Baby {
   String getAgeLabel() {
     if (birthDate == null) return name;
     final now = DateTime.now();
-    final ageInMonths = _calculateAgeInMonths(birthDate!, now);
+    final ageInMonths = AgeCalculator.calculateAgeInMonths(birthDate!, now);
     if (ageInMonths < 0) {
       // 还没出生，显示孕期
-      final weeks = (-ageInMonths * 4.33).round();
+      final weeks = AgeCalculator.calculateWeeksDifference(birthDate!, now);
       return '$name (孕$weeks周)';
     } else {
       // 已出生，显示月龄
       return '$name ($ageInMonths个月)';
     }
-  }
-
-  int _calculateAgeInMonths(DateTime birthDate, DateTime currentDate) {
-    int months = (currentDate.year - birthDate.year) * 12 +
-        currentDate.month -
-        birthDate.month;
-    if (currentDate.day < birthDate.day) {
-      months--;
-    }
-    return months;
   }
 }
 
@@ -101,25 +92,15 @@ class AppConfig {
   String getAgeLabel() {
     if (babyBirthDate == null) return babyName;
     final now = DateTime.now();
-    final ageInMonths = _calculateAgeInMonths(babyBirthDate!, now);
+    final ageInMonths = AgeCalculator.calculateAgeInMonths(babyBirthDate!, now);
     if (ageInMonths < 0) {
       // 还没出生，显示孕期
-      final weeks = (-ageInMonths * 4.33).round();
+      final weeks = AgeCalculator.calculateWeeksDifference(babyBirthDate!, now);
       return '$babyName (孕$weeks周)';
     } else {
       // 已出生，显示月龄
       return '$babyName ($ageInMonths个月)';
     }
-  }
-
-  int _calculateAgeInMonths(DateTime birthDate, DateTime currentDate) {
-    int months = (currentDate.year - birthDate.year) * 12 +
-        currentDate.month -
-        birthDate.month;
-    if (currentDate.day < birthDate.day) {
-      months--;
-    }
-    return months;
   }
 
   // 创建副本的方法

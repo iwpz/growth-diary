@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/app_config.dart';
 
 class BirthDateLabel extends StatelessWidget {
@@ -71,7 +72,7 @@ class BirthDateLabel extends StatelessWidget {
               ),
             ),
             child: Text(
-              '出生日期: ${config.childBirthDate?.toString().split(' ')[0] ?? '未设置'}',
+              '出生啦！${DateFormat('yyyy年M月d日').format(config.childBirthDate ?? DateTime.now())}',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,

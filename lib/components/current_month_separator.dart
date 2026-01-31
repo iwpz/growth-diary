@@ -14,83 +14,63 @@ class CurrentMonthSeparator extends StatelessWidget {
     if (birthDate == null) {
       return const SizedBox.shrink(); // Or some default
     }
-    final currentAgeInMonths =
-        AgeCalculator.calculateAgeInMonths(birthDate, currentDate);
     final ageLabel =
-        AgeCalculator.formatDetailedAgeLabel(birthDate, currentDate);
+        AgeCalculator.formatSimplifiedAgeLabel(birthDate, currentDate);
 
-    return Row(
-      children: [
-        // Timeline indicator for current month
-        SizedBox(
-          width: 60,
-          child: Column(
-            children: [
-              // Month circle
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.pink.shade300, Colors.pink.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.pink.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // 气泡背景
+          Container(
+            width: double.infinity,
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.pink.shade50,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: Colors.pink.shade200,
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.pink.withValues(alpha: 0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
-                child: Center(
-                  child: Text(
-                    '$currentAgeInMonths',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+              ],
+            ),
+          ),
+          // 内容
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.cake,
+                color: Colors.pink.shade600,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '宝宝现在$ageLabel啦',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.pink.shade800,
                 ),
               ),
-
-              // Bottom line
-              Container(
-                width: 2,
-                height: 24,
-                color: Colors.pink.shade200,
+              const SizedBox(width: 12),
+              Icon(
+                Icons.celebration,
+                color: Colors.pink.shade600,
+                size: 28,
               ),
             ],
           ),
-        ),
-        const SizedBox(width: 16),
-        // Age label
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: Colors.pink.shade50,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.pink.shade200,
-                width: 1,
-              ),
-            ),
-            child: Text(
-              ageLabel,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.pink.shade700,
-              ),
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

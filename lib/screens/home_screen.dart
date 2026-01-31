@@ -747,6 +747,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final sortedEntries = List<DiaryEntry>.from(_entries)
       ..sort((a, b) => b.date.compareTo(a.date));
 
+    int? currentGroupKey;
+    bool isFirstGroup = true;
+    int? latestEntryGroupKey;
+
     // Build items list with special labels inserted dynamically
     final items = <Widget>[];
 
@@ -763,16 +767,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             AgeCalculator.calculateAgeInMonths(birthDate, currentDate);
         final latestEntryGroupKey = latestEntry.getGroupKey(currentConfig);
 
-        // If latest entry is not in current month, add its month separator
+        // If latest entry is not in current month, mark it as already handled
         if (latestEntryGroupKey != currentAgeInMonths) {
-          final isPregnancyPeriod = currentConfig.conceptionDate != null &&
-              latestEntry.date.isBefore(birthDate);
-          items.add(GroupSeparator(
-              representativeEntry: latestEntry,
-              isFirstGroup: false,
-              isLastGroup: false,
-              isPregnancyPeriod: isPregnancyPeriod,
-              config: currentConfig));
+          currentGroupKey = latestEntryGroupKey;
+          isFirstGroup = false;
         }
       }
     }
@@ -811,10 +809,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
-    int? currentGroupKey;
-    bool isFirstGroup = true;
-    int? latestEntryGroupKey;
-
     // Get the latest entry's group key if we already added its separator
     if (sortedEntries.isNotEmpty) {
       final latestEntry = sortedEntries.first;
@@ -838,26 +832,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // Check if we need to insert group separator
       if (currentGroupKey != entryGroupKey) {
-        if (currentGroupKey != null) {
-          // This is not the first group, add separator before this group
-          final isPregnancyPeriod = currentConfig.conceptionDate != null &&
-              entry.date.isBefore(birthDate ?? DateTime.now());
-          // Check if this is the last group
-          bool isLastGroup = true;
-          for (int j = i; j < sortedEntries.length; j++) {
-            if (sortedEntries[j].getGroupKey(currentConfig) != entryGroupKey) {
-              isLastGroup = false;
-              break;
-            }
-          }
-          items.add(GroupSeparator(
-              representativeEntry: entry,
-              isFirstGroup: isFirstGroup,
-              isLastGroup: isLastGroup,
-              isPregnancyPeriod: isPregnancyPeriod,
-              config: currentConfig));
-          isFirstGroup = false;
-        }
         currentGroupKey = entryGroupKey;
       }
 
@@ -891,6 +865,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         thumbnailCache: _thumbnailCache,
         thumbnailFutures: _thumbnailFutures,
       ));
+
+      // Add group separator after the entry if it's the last in the group
+      if (isLastInGroup) {
+        bool isPregnancyPeriod = currentConfig.conceptionDate != null &&
+            entry.date.isBefore(birthDate ?? DateTime.now());
+        // Don't add separator for the last pregnancy group
+        bool isLastPregnancyGroup = (i == sortedEntries.length - 1 ||
+            !sortedEntries[i + 1].date.isAfter(birthDate ?? DateTime.now()));
+        if (!isLastPregnancyGroup) {
+          bool isLastGroupOverall = i == sortedEntries.length - 1;
+          items.add(GroupSeparator(
+              representativeEntry: entry,
+              isFirstGroup: isFirstGroup,
+              isLastGroup: isLastGroupOverall,
+              isPregnancyPeriod: isPregnancyPeriod,
+              config: currentConfig));
+          isFirstGroup = false;
+        }
+      }
 
       // Check if we need to insert birth label after the last post-birth entry
       if (birthDate != null &&
@@ -1074,8 +1067,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('导入'),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('导入'),
               ),
             ],
           ),
@@ -1117,7 +1110,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     final importedConfig = await _scanQRCodeForBaby();
                     if (importedConfig != null) {
                       setState(() {
-                        babyName = importedConfig.babyName ?? '';
+                        babyName = importedConfig.babyName;
                         birthDate = importedConfig.babyBirthDate;
                         conceptionDate = importedConfig.babyConceptionDate;
                       });
