@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/cloud_storage_service.dart';
@@ -19,6 +20,13 @@ import '../components/current_month_separator.dart';
 import '../components/group_separator.dart';
 import '../components/timeline_item.dart';
 import 'qr_scanner_screen.dart';
+
+class UploadProgressData {
+  final bool hasActiveTasks;
+  final String progressText;
+
+  UploadProgressData(this.hasActiveTasks, this.progressText);
+}
 
 class HomeScreen extends StatefulWidget {
   final Map<String, AppConfig> configs;
@@ -48,6 +56,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final Map<String, Future<Uint8List?>> _thumbnailFutures = {};
   bool _isExpanded = false;
   final ImagePicker _picker = ImagePicker();
+  final ValueNotifier<UploadProgressData> _uploadProgressNotifier =
+      ValueNotifier(UploadProgressData(false, ''));
 
   late Map<String, AppConfig> configs;
   late String currentConfigId;
@@ -324,11 +334,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             detectedDate = _parseExifDate(imageDateTime.toString());
           } else {
             final stat = await firstImage.stat();
-            detectedDate = stat.changed;
+            detectedDate = stat.modified;
           }
         } catch (e) {
           final stat = await firstImage.stat();
-          detectedDate = stat.changed;
+          detectedDate = stat.modified;
         }
       }
 
@@ -389,14 +399,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     print('Add video button pressed');
     _toggleExpanded(); // 关闭菜单
     try {
-      final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
-      if (video == null) return;
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        allowMultiple: true,
+      );
+      if (result == null || result.files.isEmpty) return;
 
-      // 获取视频的日期
+      // 获取第一个视频的日期作为参考
       DateTime detectedDate = DateTime.now();
-      final videoFile = File(video.path);
-      final stat = await videoFile.stat();
-      detectedDate = stat.changed;
+      if (result.files.isNotEmpty) {
+        final firstFile = result.files.first;
+        if (firstFile.path != null) {
+          final videoFile = File(firstFile.path!);
+          final stat = await videoFile.stat();
+          detectedDate = stat.modified;
+        }
+      }
 
       // 检查日期是否早于阈值日期（受孕日或出生前280天）
       String? description;
@@ -410,18 +428,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       if (thresholdDate != null && detectedDate.isBefore(thresholdDate)) {
-        final result = await _showDateAndDescriptionDialog(detectedDate);
-        if (result == null) return; // 用户取消
-        selectedDate = result['date'] as DateTime;
-        description = result['description'] as String;
+        final resultDialog = await _showDateAndDescriptionDialog(detectedDate);
+        if (resultDialog == null) return; // 用户取消
+        selectedDate = resultDialog['date'] as DateTime;
+        description = resultDialog['description'] as String;
       } else {
         description = await _showDescriptionDialog();
         if (description == null) return;
       }
 
+      // 获取文件路径
+      final mediaPaths = result.files.map((file) => file.path!).toList();
+
       // 启动后台上传
       await BackgroundUploadService.startBackgroundUpload(
-        mediaPaths: [video.path],
+        mediaPaths: mediaPaths,
         description: description,
         config: currentConfig,
         overrideDate: selectedDate,
@@ -493,8 +514,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _updateUploadProgress() {
-    if (!mounted) return;
-    setState(() {});
+    final allTasks = BackgroundUploadService.getAllUploadTasks();
+    final activeTasks = allTasks
+        .where((task) => task.status == UploadStatus.uploading)
+        .toList();
+
+    // 计算当前上传进度
+    int totalUploadFiles = 0;
+    int uploadedFilesCount = 0;
+    for (final task in activeTasks) {
+      totalUploadFiles += task.mediaPaths.length;
+      uploadedFilesCount += task.uploadedCount;
+    }
+
+    final hasActiveTasks = activeTasks.isNotEmpty;
+    final progressText =
+        hasActiveTasks ? '$uploadedFilesCount/$totalUploadFiles' : '';
+
+    _uploadProgressNotifier.value =
+        UploadProgressData(hasActiveTasks, progressText);
   }
 
   @override
@@ -529,36 +567,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               curve: Curves.easeOut,
             );
           },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  currentConfig.babyName,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (activeTasks.isNotEmpty) ...[
-                const SizedBox(width: 12),
-                Text(
-                  '$uploadedFilesCount/$totalUploadFiles',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.pink,
-                    fontWeight: FontWeight.w500,
+          child: ValueListenableBuilder<UploadProgressData>(
+            valueListenable: _uploadProgressNotifier,
+            builder: (context, progressData, child) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    currentConfig.babyName,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 8),
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.pink),
+                if (progressData.hasActiveTasks) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    progressData.progressText,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.pink,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.pink),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         backgroundColor: Colors.transparent,
@@ -650,7 +691,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       child: const Icon(Icons.book),
                     ),
                   ),
-                // 主按钮
                 FloatingActionButton(
                   heroTag: 'main_fab',
                   onPressed: _toggleExpanded,

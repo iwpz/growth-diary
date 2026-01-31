@@ -328,58 +328,93 @@ class BackgroundUploadService {
         return;
       }
 
-      if (remainingFiles.length == 1 && _isVideoFile(remainingFiles.first)) {
-        // 单个视频上传
-        final videoFile = File(remainingFiles.first);
-        if (!await videoFile.exists()) {
-          throw Exception('视频文件不存在: ${remainingFiles.first}');
-        }
+      // 分离视频文件和图片文件
+      final videoFiles = <String>[];
+      final imageFiles = <String>[];
 
-        await entryService.createVideoEntry(
-          XFile(videoFile.path),
-          task.description,
-          task.config,
-          (uploaded, total) {
-            task.uploadedCount = uploaded;
-            print(
-                'Video upload progress: uploaded=$uploaded, total=$total, task.uploadedCount=${task.uploadedCount}');
-            _showProgressNotification(
-                task.uploadedCount, task.mediaPaths.length, '正在上传视频...');
-            _saveUploadTask(task); // 实时保存进度
-            _onUploadProgressUpdated?.call(); // 通知UI更新进度
-          },
-          task.overrideDate,
-        );
-      } else {
-        // 图片上传（支持多张，按日期分组）
-        final imageFiles = <XFile>[];
-        for (final path in remainingFiles) {
-          final file = File(path);
-          if (!await file.exists()) {
-            task.failedFiles.add(path);
-            task.errorMessage = '图片文件不存在: $path';
+      for (final path in remainingFiles) {
+        if (_isVideoFile(path)) {
+          videoFiles.add(path);
+        } else {
+          imageFiles.add(path);
+        }
+      }
+
+      // 处理视频文件
+      if (videoFiles.isNotEmpty) {
+        final validVideoFiles = <XFile>[];
+        for (final videoPath in videoFiles) {
+          final videoFile = File(videoPath);
+          if (!await videoFile.exists()) {
+            task.failedFiles.add(videoPath);
+            task.errorMessage = '视频文件不存在: $videoPath';
             await _saveUploadTask(task);
             continue;
           }
-          imageFiles.add(XFile(file.path));
+          validVideoFiles.add(XFile(videoFile.path));
         }
 
-        if (imageFiles.isNotEmpty) {
-          await entryService.createImageEntry(
-            imageFiles,
-            task.description,
-            task.config,
-            (uploaded, total) {
-              task.uploadedCount = uploaded;
-              print(
-                  'Image upload progress: uploaded=$uploaded, total=$total, task.uploadedCount=${task.uploadedCount}');
-              _showProgressNotification(
-                  task.uploadedCount, task.mediaPaths.length, '正在上传图片...');
-              _saveUploadTask(task); // 实时保存进度
-              _onUploadProgressUpdated?.call(); // 通知UI更新进度
-            },
-            task.overrideDate,
-          );
+        if (validVideoFiles.isNotEmpty) {
+          try {
+            await entryService.createVideoEntry(
+              validVideoFiles,
+              task.description,
+              task.config,
+              (uploaded, total) {
+                // 视频上传进度：设置总数
+                task.uploadedCount = task.uploadedCount + uploaded;
+                print(
+                    'Video upload progress: uploaded=$uploaded, total=$total, task.uploadedCount=${task.uploadedCount}/${task.mediaPaths.length}');
+                _showProgressNotification(
+                    task.uploadedCount, task.mediaPaths.length, '正在上传视频...');
+                _saveUploadTask(task); // 实时保存进度
+                _onUploadProgressUpdated?.call(); // 通知UI更新进度
+              },
+              task.overrideDate,
+            );
+          } catch (e) {
+            task.errorMessage = '视频上传失败: $e';
+            await _saveUploadTask(task);
+          }
+        }
+      }
+
+      // 处理图片文件
+      if (imageFiles.isNotEmpty) {
+        final validImageFiles = <XFile>[];
+        for (final imagePath in imageFiles) {
+          final imageFile = File(imagePath);
+          if (!await imageFile.exists()) {
+            task.failedFiles.add(imagePath);
+            task.errorMessage = '图片文件不存在: $imagePath';
+            await _saveUploadTask(task);
+            continue;
+          }
+          validImageFiles.add(XFile(imageFile.path));
+        }
+
+        if (validImageFiles.isNotEmpty) {
+          try {
+            await entryService.createImageEntry(
+              validImageFiles,
+              task.description,
+              task.config,
+              (uploaded, total) {
+                // 图片上传进度：设置总数
+                task.uploadedCount = task.uploadedCount + uploaded;
+                print(
+                    'Image upload progress: uploaded=$uploaded, total=$total, task.uploadedCount=${task.uploadedCount}/${task.mediaPaths.length}');
+                _showProgressNotification(
+                    task.uploadedCount, task.mediaPaths.length, '正在上传图片...');
+                _saveUploadTask(task); // 实时保存进度
+                _onUploadProgressUpdated?.call(); // 通知UI更新进度
+              },
+              task.overrideDate,
+            );
+          } catch (e) {
+            task.errorMessage = '图片上传失败: $e';
+            await _saveUploadTask(task);
+          }
         }
       }
 

@@ -308,22 +308,55 @@ class WebDAVService implements CloudStorageService {
       await _client!.writeFromFile(file.path, originalPath);
 
       // 生成缩略图
-      Uint8List? thumbnail = await VideoThumbnail.thumbnailData(
-        video: file.path,
-        imageFormat: ImageFormat.JPEG,
-        maxWidth: 400, // 中号缩略图
-        quality: 75,
-      );
+      debugPrint('Generating thumbnail for video: ${file.path}');
+      Uint8List? thumbnail;
+      try {
+        thumbnail = await VideoThumbnail.thumbnailData(
+          video: file.path,
+          imageFormat: ImageFormat.JPEG,
+          maxWidth: 400, // 中号缩略图
+          quality: 75,
+          timeMs: 1000, // 从第1秒开始获取缩略图
+        );
+        debugPrint(
+            'VideoThumbnail.thumbnailData result: ${thumbnail != null ? 'success (${thumbnail.length} bytes)' : 'null'}');
+      } catch (e) {
+        debugPrint('VideoThumbnail.thumbnailData exception: $e');
+        thumbnail = null;
+      }
 
-      if (thumbnail == null) {
-        // 生成默认缩略图
+      if (thumbnail == null || thumbnail.isEmpty) {
+        debugPrint(
+            'Failed to generate video thumbnail for $fileName, trying alternative method');
+        // 尝试不同的参数
+        try {
+          thumbnail = await VideoThumbnail.thumbnailData(
+            video: file.path,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 400,
+            quality: 75,
+            timeMs: 0, // 从开始位置
+          );
+          debugPrint(
+              'Alternative VideoThumbnail result: ${thumbnail != null ? 'success (${thumbnail.length} bytes)' : 'null'}');
+        } catch (e) {
+          debugPrint('Alternative VideoThumbnail exception: $e');
+          thumbnail = null;
+        }
+      }
+
+      if (thumbnail == null || thumbnail.isEmpty) {
+        debugPrint(
+            'All thumbnail generation methods failed for $fileName, using default thumbnail');
+        // 生成默认缩略图 - 简单的灰色背景
         final defaultImage = img.Image(width: 400, height: 300);
         img.fillRect(defaultImage,
             x1: 0,
             y1: 0,
             x2: 400,
             y2: 300,
-            color: img.ColorUint8.rgba(0, 0, 0, 255)); // 黑色
+            color: img.ColorUint8.rgba(150, 150, 150, 255)); // 灰色背景
+
         thumbnail = img.encodeJpg(defaultImage, quality: 75);
       }
 
@@ -341,12 +374,15 @@ class WebDAVService implements CloudStorageService {
         await _client!.write(smallPath, smallData);
 
         return 'media/$fileName|thumbnails/$mediumFileName|thumbnails/$smallFileName'; // 返回相对路径
+      } else {
+        debugPrint('Failed to decode thumbnail image for $fileName');
+        // 如果无法解码图片，返回只有视频路径
+        return 'media/$fileName||'; // 返回空缩略图路径
       }
-
-      return 'media/$fileName'; // 返回相对路径
     } catch (e) {
       debugPrint('Error uploading video with thumbnails: $e');
-      rethrow;
+      // 如果出现错误，只返回视频路径
+      return 'media/$fileName||';
     }
   }
 
