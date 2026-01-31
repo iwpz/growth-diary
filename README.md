@@ -56,24 +56,13 @@ flutter build ios
 
 项目已配置 GitHub Actions 自动构建 APK：
 
-### 自动触发
-- **Push 到主分支**: 自动构建测试 APK 并上传为 Artifacts
+### 使用方法
 
-### 手动发布
-1. 进入 GitHub **Actions** 标签页
-2. 选择 **"Build and Release APK"** workflow
-3. 点击 **"Run workflow"**
-4. 配置参数：
-   - **Version name**: 版本号 (如: v1.0.0)
-   - **Create release**: 勾选以创建发布草稿
-
-### 构建产物
-- **测试构建**: 使用测试密钥，文件名包含时间戳
-- **发布构建**: 使用配置的密钥，附加到 Release 草稿
-- **产物位置**: GitHub Actions Artifacts 或 Release 附件
-
-### 生产环境配置
-对于生产发布，建议配置真实的签名密钥到 GitHub Secrets 中。
+0. 设置 GitHub Secrets `STORE_PASS` 密钥密码(用于生产环境签名)，仅首次使用时需要配置。
+1. 进入 GitHub 仓库的 **Actions** 标签页。
+2. 选择 **Build and Release APK** workflow。
+3. 点击 **Run workflow**。
+4. 填写版本信息 **Version name**: 版本号 (如: v1.0.0)
 
 ### 首次使用
 
@@ -133,7 +122,7 @@ flutter build ios
 在 WebDAV 服务器上，数据按以下结构组织：
 
 ```
-growth_diary/
+growth_diary/<baby-id>/
 ├── config.json                    # 应用配置
 ├── entries/                       # 日记条目
 │   ├── <entry-id-1>.json
