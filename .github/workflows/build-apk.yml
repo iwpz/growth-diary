@@ -45,7 +45,7 @@ jobs:
 
     - name: Create release keystore for production
       run: |
-        keytool -genkey -v -keystore android/app/release-keystore.p12 -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 10000 -alias growth -storepass ${{ secrets.STORE_PASS }} -dname "CN=Growth Diary, OU=Development, O=Hancel, L=Shenzhen, ST=Guangdong, C=CN"
+        keytool -genkey -v -keystore android/app/growth-keystore.p12 -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 10000 -alias growth -storepass ${{ secrets.STORE_PASS }} -dname "CN=Growth Diary, OU=Development, O=Hancel, L=Shenzhen, ST=Guangdong, C=CN"
 
     - name: Build APK
       run: |
@@ -61,7 +61,6 @@ jobs:
         mv build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/growth-diary-${VERSION_NAME}.apk"
 
     - name: Create Release Draft
-      if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true'
       uses: softprops/action-gh-release@v1
       with:
         draft: true
