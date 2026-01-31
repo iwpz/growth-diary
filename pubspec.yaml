@@ -26,6 +26,10 @@ dependencies:
   crypto: ^3.0.3
   workmanager: ^0.9.0
   flutter_local_notifications: ^17.0.0
+  share_plus: ^9.0.0
+  media_store_plus: ^0.1.0
+
+
 
 dev_dependencies:
   flutter_test:

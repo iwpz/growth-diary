@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:image/image.dart' as img;
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/diary_entry.dart';
 import '../models/app_config.dart';
 import 'cloud_storage_service.dart';
@@ -389,5 +390,22 @@ class WebDAVService implements CloudStorageService {
   @override
   Future<void> clearCache() async {
     await _fileCache.clear();
+  }
+
+  @override
+  Future<File?> saveToTempFile(String path, Uint8List? data) async {
+    try {
+      final mediaData = data ?? await downloadMedia(path);
+      if (mediaData == null) return null;
+
+      final tempDir = await getTemporaryDirectory();
+      final fileName = path.split('/').last;
+      final tempFile = File('${tempDir.path}/$fileName');
+      await tempFile.writeAsBytes(mediaData);
+      return tempFile;
+    } catch (e) {
+      debugPrint('Error saving to temp file: $e');
+      return null;
+    }
   }
 }

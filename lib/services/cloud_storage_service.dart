@@ -19,4 +19,7 @@ abstract class CloudStorageService {
 
   // 缓存相关方法
   Future<void> clearCache();
+
+  // 临时文件保存方法
+  Future<File?> saveToTempFile(String path, Uint8List? data);
 }
