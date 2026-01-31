@@ -52,6 +52,29 @@ flutter build apk
 flutter build ios
 ```
 
+## CI/CD 自动化构建
+
+项目已配置 GitHub Actions 自动构建 APK：
+
+### 自动触发
+- **Push 到主分支**: 自动构建测试 APK 并上传为 Artifacts
+
+### 手动发布
+1. 进入 GitHub **Actions** 标签页
+2. 选择 **"Build and Release APK"** workflow
+3. 点击 **"Run workflow"**
+4. 配置参数：
+   - **Version name**: 版本号 (如: v1.0.0)
+   - **Create release**: 勾选以创建发布草稿
+
+### 构建产物
+- **测试构建**: 使用测试密钥，文件名包含时间戳
+- **发布构建**: 使用配置的密钥，附加到 Release 草稿
+- **产物位置**: GitHub Actions Artifacts 或 Release 附件
+
+### 生产环境配置
+对于生产发布，建议配置真实的签名密钥到 GitHub Secrets 中。
+
 ### 首次使用
 
 1. 启动应用后会显示初始设置界面

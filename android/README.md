@@ -1,4 +1,4 @@
-# Android APK 签名配置指南
+# Android APK 签名与打包
 
 ## 概述
 本项目已配置 Android APK 签名功能，用于生成可发布的 APK 文件。
@@ -14,6 +14,7 @@ android/
 ```
 
 ## 环境变量
+
 - `ANDROID_KEYSTORE_PASSWORD`: 密钥库密码（PKCS12 格式使用单一密码）
 
 如果设置了环境变量，构建时会优先使用环境变量中的值。
@@ -56,8 +57,21 @@ flutter build apk --release
 ```
 
 生成的 APK 文件位于 `build/app/outputs/flutter-apk/app-release.apk`
-
+  
 ## 安全注意事项
 - 不要将 `key.properties` 文件更新的密钥和 `growth-keystore.p12` 文件提交到版本控制系统
 - 妥善保管您的密钥库文件和密码
 - 考虑将敏感信息存储在环境变量或安全的密钥管理系统中
+
+## CI/CD 自动化构建
+
+项目已配置 GitHub Actions 自动构建 APK：
+
+### 使用方法
+
+0. 设置 GitHub Secrets `STORE_PASS` 密钥密码(用于生产环境签名)，仅首次使用时需要配置。
+1. 进入 GitHub 仓库的 **Actions** 标签页。
+2. 选择 **Build and Release APK** workflow。
+3. 点击 **Run workflow**。
+4. 填写版本信息 **Version name**: 版本号 (如: v1.0.0)
+
