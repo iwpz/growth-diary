@@ -13,7 +13,7 @@
     <application
         android:label="growth_diary"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon">
 
         <!-- WorkManager provider -->
         <provider

@@ -137,24 +137,16 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.pink.shade100,
-              Colors.purple.shade100,
-            ],
-          ),
-        ),
+        color: Colors.white, // 纯白色背景
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.child_care,
-                size: 100,
-                color: Colors.pink.shade300,
+              Image.asset(
+                'assets/images/foreground.png',
+                width: 100,
+                height: 100,
+                fit: BoxFit.contain,
               ),
               const SizedBox(height: 20),
               const Text(
@@ -162,12 +154,12 @@ class _SplashScreenState extends State<SplashScreen> {
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Colors.black87, // 深色文字在白色背景上
                 ),
               ),
               const SizedBox(height: 40),
               const CircularProgressIndicator(
-                color: Colors.white,
+                color: Colors.pink, // 粉色加载指示器
               ),
             ],
           ),
