@@ -572,6 +572,10 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
                 child: CircularProgressIndicator(color: Colors.white));
           } else if (imageData != null) {
             return InteractiveViewer(
+              panEnabled: true,
+              scaleEnabled: true,
+              minScale: 0.5,
+              maxScale: 4.0,
               child: Center(
                 child: Image.memory(
                   imageData,
