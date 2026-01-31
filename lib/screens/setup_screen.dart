@@ -289,10 +289,11 @@ class _SetupScreenState extends State<SetupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(
-                Icons.child_care,
-                size: 80,
-                color: Colors.pink,
+              Image.asset(
+                'assets/images/foreground.png',
+                width: 100,
+                height: 100,
+                fit: BoxFit.contain,
               ),
               const SizedBox(height: 20),
               const Text(
