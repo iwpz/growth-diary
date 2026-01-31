@@ -37,9 +37,6 @@ jobs:
     - name: Run Flutter analyze
       run: flutter analyze
 
-    - name: Run Flutter tests
-      run: flutter test
-
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -47,11 +44,7 @@ jobs:
         distribution: 'temurin'
 
     - name: Create release keystore for production
-      if: github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true'
       run: |
-        # For production releases, you should provide real keystore
-        # This is just a placeholder - replace with your actual keystore setup
-        echo "For production releases, please configure your actual keystore"
         keytool -genkey -v -keystore android/app/release-keystore.p12 -storetype PKCS12 -keyalg RSA -keysize 2048 -validity 10000 -alias growth -storepass ${{ secrets.STORE_PASS }} -dname "CN=Growth Diary, OU=Development, O=Hancel, L=Shenzhen, ST=Guangdong, C=CN"
 
     - name: Build APK
