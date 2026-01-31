@@ -4,7 +4,7 @@
 
 <h1 align="center">成长日记 (Growth Diary)</h1>
 
-一个用于记录孩子从出生到现在的成长日记应用，基于 Flutter 开发的跨平台 App。
+<p align="center">一个用于记录孩子从出生到现在的成长日记应用，基于 Flutter 开发的跨平台 App。</p>
 
 ## 功能特点
 
