@@ -10,21 +10,25 @@ import '../services/cloud_storage_service.dart';
 import '../services/background_upload_service.dart';
 import '../utils/age_calculator.dart';
 import '../services/local_storage_service.dart';
-import 'entry_detail_screen.dart';
 import 'settings_screen.dart';
 import 'diary_editor_screen.dart';
+import '../components/birth_date_label.dart';
+import '../components/pregnancy_label.dart';
+import '../components/current_month_separator.dart';
+import '../components/group_separator.dart';
+import '../components/timeline_item.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, AppConfig> configs;
   final String currentConfigId;
-  final CloudStorageService webdavService;
+  final CloudStorageService cloudService;
   final LocalStorageService localStorage;
 
   const HomeScreen({
     super.key,
     required this.configs,
     required this.currentConfigId,
-    required this.webdavService,
+    required this.cloudService,
     required this.localStorage,
   });
 
@@ -88,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     BackgroundUploadService.setUploadProgressCallback(_onUploadProgressUpdated);
 
     // 初始化WebDAV服务，为当前宝宝创建文件夹
-    widget.webdavService.initialize(currentConfig).then((_) {
+    widget.cloudService.initialize(currentConfig).then((_) {
       debugPrint('WebDAV service initialized');
     }).catchError((e) {
       debugPrint('Error initializing WebDAV service: $e');
@@ -134,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
 
     try {
-      final entries = await widget.webdavService.loadAllEntries();
+      final entries = await widget.cloudService.loadAllEntries();
       debugPrint('Loaded ${entries.length} entries');
       setState(() {
         _entries = entries;
@@ -152,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _switchConfig() async {
     // 重新初始化WebDAV服务
-    await widget.webdavService.initialize(currentConfig);
+    await widget.cloudService.initialize(currentConfig);
 
     // 清除当前数据
     setState(() {
@@ -175,8 +179,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
 
     try {
-      final newEntries = await widget.webdavService
-          .loadEntriesPage(_entries.length, _pageSize);
+      final newEntries =
+          await widget.cloudService.loadEntriesPage(_entries.length, _pageSize);
       setState(() {
         _entries.addAll(newEntries);
         _isLoadingMore = false;
@@ -447,7 +451,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       MaterialPageRoute(
         builder: (context) => DiaryEditorScreen(
           config: currentConfig,
-          webdavService: widget.webdavService,
+          webdavService: widget.cloudService,
         ),
       ),
     ).then((_) => _loadEntries());
@@ -567,7 +571,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 MaterialPageRoute(
                   builder: (context) => SettingsScreen(
                     config: currentConfig,
-                    webdavService: widget.webdavService,
+                    cloudService: widget.cloudService,
                     onConfigChanged: (newConfig) {
                       setState(() {
                         configs[newConfig.id] = newConfig;
@@ -745,7 +749,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final items = <Widget>[];
 
     // Always add current month separator at the top
-    items.add(_buildCurrentMonthSeparator());
+    items.add(CurrentMonthSeparator(config: currentConfig));
 
     // Check if the latest entry is not in current month, add its month separator
     if (sortedEntries.isNotEmpty) {
@@ -761,8 +765,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (latestEntryGroupKey != currentAgeInMonths) {
           final isPregnancyPeriod = currentConfig.conceptionDate != null &&
               latestEntry.date.isBefore(birthDate);
-          items.add(_buildGroupSeparator(
-              latestEntry, false, false, isPregnancyPeriod, currentConfig));
+          items.add(GroupSeparator(
+              representativeEntry: latestEntry,
+              isFirstGroup: false,
+              isLastGroup: false,
+              isPregnancyPeriod: isPregnancyPeriod,
+              config: currentConfig));
         }
       }
     }
@@ -840,8 +848,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               break;
             }
           }
-          items.add(_buildGroupSeparator(entry, isFirstGroup, isLastGroup,
-              isPregnancyPeriod, currentConfig));
+          items.add(GroupSeparator(
+              representativeEntry: entry,
+              isFirstGroup: isFirstGroup,
+              isLastGroup: isLastGroup,
+              isPregnancyPeriod: isPregnancyPeriod,
+              config: currentConfig));
           isFirstGroup = false;
         }
         currentGroupKey = entryGroupKey;
@@ -853,7 +865,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           hasPregnancyEntries &&
           entry.date.isBefore(conceptionDate) &&
           (i == 0 || sortedEntries[i - 1].date.isAfter(conceptionDate))) {
-        items.add(_buildPregnancyLabel());
+        items.add(PregnancyLabel(config: currentConfig));
         hasInsertedConceptionLabel = true;
       }
 
@@ -865,8 +877,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final isLastInGroup = i == sortedEntries.length - 1 ||
           entryGroupKey != sortedEntries[i + 1].getGroupKey(currentConfig);
 
-      items.add(_buildTimelineItem(entry, isFirst, isLast, isFirstInGroup,
-          isLastInGroup && conceptionDate == null));
+      items.add(TimelineItem(
+        entry: entry,
+        isFirst: isFirst,
+        isLast: isLast,
+        isFirstInGroup: isFirstInGroup,
+        isLastInGroup: isLastInGroup && conceptionDate == null,
+        config: currentConfig,
+        webdavService: widget.cloudService,
+        onEntryUpdated: _loadEntries,
+        thumbnailCache: _thumbnailCache,
+        thumbnailFutures: _thumbnailFutures,
+      ));
 
       // Check if we need to insert birth label after the last post-birth entry
       if (birthDate != null &&
@@ -874,7 +896,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           hasPreBirthEntries &&
           lastPostBirthIndex != null &&
           i == lastPostBirthIndex) {
-        items.add(_buildBirthDateLabel(showBottomLine: true));
+        items.add(BirthDateLabel(config: currentConfig, showBottomLine: true));
         hasInsertedBirthLabel = true;
       }
     }
@@ -883,10 +905,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (conceptionDate != null &&
         !hasInsertedConceptionLabel &&
         hasPregnancyEntries) {
-      items.add(_buildPregnancyLabel());
+      items.add(PregnancyLabel(config: currentConfig));
     }
     if (birthDate != null && !hasInsertedBirthLabel) {
-      items.add(_buildBirthDateLabel(showBottomLine: false));
+      items.add(BirthDateLabel(config: currentConfig, showBottomLine: false));
     }
 
     // Add loading indicator if loading more
@@ -905,622 +927,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         itemCount: items.length,
         itemBuilder: (context, index) => items[index],
       ),
-    );
-  }
-
-  Widget _buildGroupSeparator(DiaryEntry representativeEntry, bool isFirstGroup,
-      bool isLastGroup, bool isPregnancyPeriod, AppConfig config) {
-    final groupValue = representativeEntry.getGroupKey(config);
-    final displayValue = isPregnancyPeriod
-        ? groupValue
-        : (groupValue < 0 ? -groupValue : groupValue);
-    final displayText = isPregnancyPeriod
-        ? '$displayValue'
-        : (groupValue < 0 ? '前$displayValue' : '$displayValue');
-    final labelText = isPregnancyPeriod
-        ? '孕期 $displayValue 周'
-        : representativeEntry.getSimplifiedAgeLabel(config.childBirthDate);
-
-    return Row(
-      children: [
-        // Timeline indicator for group
-        SizedBox(
-          width: 60,
-          child: Column(
-            children: [
-              // Top line (only if not first group)
-              Container(
-                width: 2,
-                height: 24,
-                color: Colors.pink.shade200,
-              ),
-
-              // Group circle
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.pink.shade300, Colors.pink.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.pink.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    displayText,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Bottom line (only if not last group)
-              Container(
-                width: 2,
-                height: 24,
-                color: Colors.pink.shade200,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        // Group label
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.pink.shade50,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.pink.shade200,
-                width: 1,
-              ),
-            ),
-            child: Text(
-              labelText,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.pink.shade700,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimelineItem(DiaryEntry entry, bool isFirst, bool isLast,
-      bool isFirstInGroup, bool isLastInGroup) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Timeline indicator
-          SizedBox(
-            width: 60,
-            child: Column(
-              children: [
-                // Top line (only if not first in month)
-                Container(
-                  width: 2,
-                  height: 24,
-                  color: Colors.pink.shade200,
-                ),
-
-                // Circle indicator
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border: Border.all(
-                      color: Colors.pink.shade300,
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.pink.withValues(alpha: 0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Bottom line
-                if (!isLastInGroup)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      color: Colors.pink.shade200,
-                    ),
-                  )
-                else if (!isLast)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      height: 48, // Connect to next month separator
-                      color: Colors.pink.shade200,
-                    ),
-                  )
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Content
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EntryDetailScreen(
-                        entry: entry,
-                        config: currentConfig,
-                        webdavService: widget.webdavService,
-                      ),
-                    ),
-                  ).then((_) => _loadEntries());
-                },
-                child: Card(
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Date
-                        // Title
-                        if (entry.title.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            entry.title,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                        // Description
-                        if (entry.description.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            entry.description,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                        ],
-                        // Media info
-                        if (entry.imagePaths.isNotEmpty ||
-                            entry.videoPaths.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              if (entry.imagePaths.isNotEmpty) ...[
-                                Icon(
-                                  Icons.photo,
-                                  size: 16,
-                                  color: Colors.grey.shade600,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${entry.imagePaths.length} 张照片',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                              if (entry.videoPaths.isNotEmpty) ...[
-                                if (entry.imagePaths.isNotEmpty)
-                                  const SizedBox(width: 12),
-                                Icon(
-                                  Icons.videocam,
-                                  size: 16,
-                                  color: Colors.grey.shade600,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${entry.videoPaths.length} 个视频',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          _buildThumbnailGrid(entry),
-                        ],
-                        Text(
-                          '${entry.date.year}-${entry.date.month.toString().padLeft(2, '0')}-${entry.date.day.toString().padLeft(2, '0')}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildThumbnailGrid(DiaryEntry entry) {
-    // 合并图片和视频缩略图，最多显示6个
-    final allThumbnails = [
-      ...entry.imageThumbnails.map((path) => {'path': path, 'isVideo': false}),
-      ...entry.videoThumbnails.map((path) => {'path': path, 'isVideo': true}),
-    ].take(6).toList();
-
-    if (allThumbnails.isEmpty) return const SizedBox.shrink();
-
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      children: allThumbnails.map((thumbnail) {
-        final path = thumbnail['path'] as String;
-        final isVideo = thumbnail['isVideo'] as bool;
-        return SizedBox(
-          width: 60,
-          height: 60,
-          child: _buildThumbnailItem(path, isVideo),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildThumbnailItem(String path, bool isVideo) {
-    return FutureBuilder<Uint8List?>(
-      future: _getThumbnailData(path),
-      builder: (context, snapshot) {
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            color: Colors.grey.shade200,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (snapshot.hasData && snapshot.data != null)
-                  Image.memory(
-                    snapshot.data!,
-                    fit: BoxFit.cover,
-                  )
-                else if (snapshot.connectionState == ConnectionState.waiting)
-                  const Center(
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                else
-                  const Center(
-                    child: Icon(
-                      Icons.image,
-                      color: Colors.grey,
-                      size: 20,
-                    ),
-                  ),
-                if (isVideo)
-                  Positioned(
-                    bottom: 2,
-                    right: 2,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: 12,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<Uint8List?> _getThumbnailData(String path) async {
-    // 如果已经有缓存的数据，直接返回
-    if (_thumbnailCache.containsKey(path)) {
-      return _thumbnailCache[path];
-    }
-
-    // 如果已经有正在进行的 Future，返回它
-    if (_thumbnailFutures.containsKey(path)) {
-      return _thumbnailFutures[path];
-    }
-
-    // 创建新的 Future 并缓存
-    final future = _loadThumbnailData(path);
-    _thumbnailFutures[path] = future;
-
-    try {
-      final data = await future;
-      _thumbnailCache[path] = data;
-      return data;
-    } finally {
-      // 清理 Future 缓存，保留数据缓存
-      _thumbnailFutures.remove(path);
-    }
-  }
-
-  Future<Uint8List?> _loadThumbnailData(String path) async {
-    try {
-      final data = await widget.webdavService.downloadMedia(path);
-      return data;
-    } catch (e) {
-      debugPrint('Error loading thumbnail $path: $e');
-      return null;
-    }
-  }
-
-  Widget _buildBirthDateLabel({bool showBottomLine = true}) {
-    final birthDate = currentConfig.childBirthDate;
-    if (birthDate == null) return const SizedBox.shrink();
-
-    return Row(
-      children: [
-        // Timeline indicator for birth date
-        SizedBox(
-          width: 60,
-          child: Column(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.blue.shade300, Colors.blue.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blue.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.child_care,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                ),
-              ),
-
-              // Bottom line (only if showBottomLine)
-              if (showBottomLine)
-                Container(
-                  width: 2,
-                  height: 24,
-                  color: Colors.blue.shade200,
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        // Birth date label
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.blue.shade200,
-                width: 1,
-              ),
-            ),
-            child: Text(
-              '宝宝来啦~ ${birthDate.year}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade700,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPregnancyLabel() {
-    final conceptionDate = currentConfig.conceptionDate;
-    if (conceptionDate == null) return const SizedBox.shrink();
-
-    return Row(
-      children: [
-        // Timeline indicator for pregnancy
-        SizedBox(
-          width: 60,
-          child: Column(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.pink.shade300, Colors.pink.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.pink.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    Icons.pregnant_woman,
-                    color: Colors.white,
-                    size: 30,
-                  ),
-                ),
-              ),
-
-              // No bottom line for the last item
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        // Pregnancy label
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.pink.shade50,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.pink.shade200,
-                width: 1,
-              ),
-            ),
-            child: Text(
-              '怀孕啦！${conceptionDate.year}-${conceptionDate.month.toString().padLeft(2, '0')}-${conceptionDate.day.toString().padLeft(2, '0')}',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.pink.shade700,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCurrentMonthSeparator() {
-    final currentDate = DateTime.now();
-    final birthDate = currentConfig.childBirthDate;
-    if (birthDate == null) {
-      return const SizedBox.shrink(); // Or some default
-    }
-    final currentAgeInMonths =
-        AgeCalculator.calculateAgeInMonths(birthDate, currentDate);
-    final ageLabel =
-        AgeCalculator.formatDetailedAgeLabel(birthDate, currentDate);
-
-    return Row(
-      children: [
-        // Timeline indicator for current month
-        SizedBox(
-          width: 60,
-          child: Column(
-            children: [
-              // Month circle
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.pink.shade300, Colors.pink.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.pink.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    '$currentAgeInMonths',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Bottom line
-              Container(
-                width: 2,
-                height: 24,
-                color: Colors.pink.shade200,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        // Age label
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: Colors.pink.shade50,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.pink.shade200,
-                width: 1,
-              ),
-            ),
-            child: Text(
-              ageLabel,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.pink.shade700,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -1743,7 +1149,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           MaterialPageRoute(
             builder: (context) => SettingsScreen(
               config: newConfig,
-              webdavService: widget.webdavService,
+              cloudService: widget.cloudService,
               onConfigChanged: (updatedConfig) {
                 setState(() {
                   configs[updatedConfig.id] = updatedConfig;

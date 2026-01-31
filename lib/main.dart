@@ -101,7 +101,7 @@ class _SplashScreenState extends State<SplashScreen> {
             builder: (context) => HomeScreen(
               configs: configs,
               currentConfigId: configId,
-              webdavService: _webdavService,
+              cloudService: _webdavService,
               localStorage: _localStorage,
             ),
           ),
@@ -114,7 +114,7 @@ class _SplashScreenState extends State<SplashScreen> {
             builder: (context) => HomeScreen(
               configs: configs,
               currentConfigId: configId,
-              webdavService: _webdavService,
+              cloudService: _webdavService,
               localStorage: _localStorage,
             ),
           ),

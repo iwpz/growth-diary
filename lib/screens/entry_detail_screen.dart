@@ -11,13 +11,13 @@ import '../utils/age_calculator.dart';
 class EntryDetailScreen extends StatefulWidget {
   final DiaryEntry entry;
   final AppConfig config;
-  final CloudStorageService webdavService;
+  final CloudStorageService cloudService;
 
   const EntryDetailScreen({
     super.key,
     required this.entry,
     required this.config,
-    required this.webdavService,
+    required this.cloudService,
   });
 
   @override
@@ -44,7 +44,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
           _loadingImages[path] = true;
         });
         try {
-          final data = await widget.webdavService.downloadMedia(path);
+          final data = await widget.cloudService.downloadMedia(path);
           if (data != null && mounted) {
             setState(() {
               _imageCache[path] = data;
@@ -70,7 +70,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
           _loadingVideoThumbnails[path] = true;
         });
         try {
-          final data = await widget.webdavService.downloadMedia(path);
+          final data = await widget.cloudService.downloadMedia(path);
           if (data != null && mounted) {
             setState(() {
               _videoThumbnailCache[path] = data;
@@ -94,7 +94,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       MaterialPageRoute(
         builder: (context) => FullScreenImageView(
           imagePaths: widget.entry.imagePaths,
-          webdavService: widget.webdavService,
+          webdavService: widget.cloudService,
           initialIndex: initialIndex,
         ),
       ),
@@ -133,7 +133,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       MaterialPageRoute(
         builder: (context) => FullScreenVideoPlayer(
           videoPath: videoPath,
-          webdavService: widget.webdavService,
+          webdavService: widget.cloudService,
         ),
       ),
     );
@@ -182,7 +182,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
         );
 
         // 保存到WebDAV
-        await widget.webdavService.saveDiaryEntry(updatedEntry);
+        await widget.cloudService.saveDiaryEntry(updatedEntry);
 
         if (!mounted) return;
 
@@ -238,7 +238,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
 
               if (confirm == true) {
                 try {
-                  await widget.webdavService.deleteEntry(widget.entry);
+                  await widget.cloudService.deleteEntry(widget.entry);
                   if (context.mounted) {
                     Navigator.pop(context);
                   }

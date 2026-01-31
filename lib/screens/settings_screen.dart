@@ -7,13 +7,13 @@ import 'webdav_config_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AppConfig config;
-  final CloudStorageService webdavService;
+  final CloudStorageService cloudService;
   final Function(AppConfig) onConfigChanged;
 
   const SettingsScreen({
     super.key,
     required this.config,
-    required this.webdavService,
+    required this.cloudService,
     required this.onConfigChanged,
   });
 
@@ -60,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _config = updatedConfig;
       });
       await _localStorage.saveConfig(_config);
-      await widget.webdavService.saveConfig(_config);
+      await widget.cloudService.saveConfig(_config);
       widget.onConfigChanged(_config);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -83,7 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _config = updatedConfig;
       });
       await _localStorage.saveConfig(_config);
-      await widget.webdavService.saveConfig(_config);
+      await widget.cloudService.saveConfig(_config);
       widget.onConfigChanged(_config);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -106,7 +106,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _config = updatedConfig;
       });
       await _localStorage.saveConfig(_config);
-      await widget.webdavService.saveConfig(_config);
+      await widget.cloudService.saveConfig(_config);
       widget.onConfigChanged(_config);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -152,7 +152,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
 
       try {
-        await widget.webdavService.clearCache();
+        await widget.cloudService.clearCache();
 
         // 关闭loading对话框
         if (mounted) {
@@ -264,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   builder: (context) => WebDAVConfigScreen(
                     mode: WebDAVConfigMode.settings,
                     config: _config,
-                    webdavService: widget.webdavService,
+                    webdavService: widget.cloudService,
                     onConfigChanged: widget.onConfigChanged,
                   ),
                 ),

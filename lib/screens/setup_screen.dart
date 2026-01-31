@@ -139,7 +139,7 @@ class _SetupScreenState extends State<SetupScreen> {
           builder: (context) => HomeScreen(
             configs: {config.id: config},
             currentConfigId: config.id,
-            webdavService: _webdavService,
+            cloudService: _webdavService,
             localStorage: localStorage,
           ),
         ),
