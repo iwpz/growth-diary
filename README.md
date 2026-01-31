@@ -1,11 +1,17 @@
-# 成长日记 (Growth Diary)
+<p align="center">
+  <img width="200" src="./assets/images/logo.svg">
+</p>
+
+<h1 align="center">成长日记 (Growth Diary)</h1>
 
 一个用于记录孩子从出生到现在的成长日记应用，基于 Flutter 开发的跨平台 App。
 
 ## 功能特点
 
 - 📸 **多媒体支持**: 支持上传照片和视频记录宝宝的成长瞬间
+- 🎬 **视频播放增强**: 支持多视频播放、左右滑动切换、自动播放下一个视频
 - 📝 **文字记录**: 可以添加文字描述，记录宝宝的趣事和成长里程碑
+- ✏️ **记录编辑**: 支持编辑已有记录的描述和日期，编辑后保持在详情页
 - 📅 **时间轴展示**: 按照宝宝年龄（月龄/岁数）组织记录，形成时间轴视图
 - ☁️ **WebDAV 存储**: 使用 WebDAV 作为数据存储，支持自建服务器或第三方服务
 - 🔄 **跨设备同步**: 配置信息存储在 WebDAV 中，可在多设备间同步
@@ -22,14 +28,6 @@
 - **Flutter**: 跨平台 UI 框架
 - **WebDAV**: 数据存储和同步
 - **Dart**: 编程语言
-
-## 主要依赖
-
-- `webdav_client`: WebDAV 客户端
-- `image_picker`: 图片和视频选择
-- `video_player`: 视频播放
-- `shared_preferences`: 本地配置存储
-- `path_provider`: 文件路径管理
 
 ## 安装和使用
 
@@ -75,16 +73,28 @@ flutter build ios
 - 每条记录显示：
   - 年龄标记（月龄/岁数）
   - 日期
-  - 标题
   - 描述摘要
   - 照片/视频数量
 - 点击记录可查看详情
 - 下拉刷新同步最新数据
 
+### 记录详情
+
+- 查看完整的记录内容
+- **视频播放**：
+  - 支持多视频播放
+  - 左右滑动切换视频
+  - 播放完成后自动播放下一个视频
+  - 支持全屏播放控制
+- **记录编辑**：
+  - 编辑描述内容
+  - 修改记录日期
+  - 编辑后保持在详情页，立即看到更新效果
+- 删除记录功能
+
 ### 新建记录
 
 - 选择日期（自动计算宝宝年龄）
-- 输入标题（必填）
 - 输入描述（可选）
 - 添加照片（支持多选）
 - 添加视频
@@ -101,40 +111,40 @@ flutter build ios
 
 ```
 growth_diary/
-├── config.json          # 应用配置
-├── entries/             # 日记条目
+├── config.json                    # 应用配置
+├── entries/                       # 日记条目
 │   ├── <entry-id-1>.json
 │   ├── <entry-id-2>.json
 │   └── ...
-└── media/               # 媒体文件
-    ├── <timestamp>_photo1.jpg
-    ├── <timestamp>_video1.mp4
+├── media/                         # 原始媒体文件
+│   ├── <timestamp>_photo1.jpg
+│   ├── <timestamp>_video1.mp4
+│   └── ...
+└── thumbnails/                    # 缩略图文件
+    ├── <timestamp>_photo1_thumb.jpg
+    ├── <timestamp>_video1_thumb.jpg
     └── ...
 ```
 
-## 开发计划
+### 条目文件结构
 
-- [ ] 添加媒体文件预览功能
-- [ ] 支持编辑已有记录
-- [ ] 导出功能（PDF/相册）
-- [ ] 更多主题选择
-- [ ] 数据备份和恢复
-- [ ] 离线模式支持
+每个 `entries/<entry-id>.json` 文件包含以下字段：
+
+```json
+{
+  "id": "唯一标识符",
+  "date": "2024-01-15T10:30:00.000Z",
+  "title": "标题",
+  "description": "详细描述",
+  "imagePaths": ["media/20240115_103000_photo1.jpg"],
+  "videoPaths": ["media/20240115_103000_video1.mp4"],
+  "imageThumbnails": ["thumbnails/20240115_103000_photo1_thumb.jpg"],
+  "videoThumbnails": ["thumbnails/20240115_103000_video1_thumb.jpg"],
+  "ageInMonths": 6
+}
+```
 
 ## 隐私说明
 
 - 所有数据存储在您自己的 WebDAV 服务器上
 - 应用不会收集或上传任何个人信息到第三方服务器
-- 密码仅存储在本地设备上
-
-## 许可证
-
-MIT License
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 支持
-
-如有问题或建议，请在 GitHub 上创建 Issue。
