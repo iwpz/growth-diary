@@ -11,12 +11,14 @@ class EntryDetailScreen extends StatefulWidget {
   final DiaryEntry entry;
   final AppConfig config;
   final CloudStorageService cloudService;
+  final void Function(EntryDetailResult, DiaryEntry)? onEntryUpdated;
 
   const EntryDetailScreen({
     super.key,
     required this.entry,
     required this.config,
     required this.cloudService,
+    this.onEntryUpdated,
   });
 
   @override
@@ -24,6 +26,7 @@ class EntryDetailScreen extends StatefulWidget {
 }
 
 class _EntryDetailScreenState extends State<EntryDetailScreen> {
+  late DiaryEntry _currentEntry;
   final Map<String, Uint8List?> _imageCache = {};
   final Map<String, bool> _loadingImages = {};
   final Map<String, Uint8List?> _videoThumbnailCache = {};
@@ -32,6 +35,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _currentEntry = widget.entry;
     _loadImages();
     _loadVideoThumbnails();
   }
@@ -103,36 +107,37 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
   String _getAgeDisplayText() {
     // 检查是否是孕期记录（在出生日期之前且配置了受孕日期）
     final isPregnancyPeriod = widget.config.conceptionDate != null &&
-        widget.entry.date
+        _currentEntry.date
             .isBefore(widget.config.childBirthDate ?? DateTime.now());
 
     if (isPregnancyPeriod) {
       // 孕期记录：显示孕周和天数
       final totalDays =
-          widget.entry.date.difference(widget.config.conceptionDate!).inDays;
+          _currentEntry.date.difference(widget.config.conceptionDate!).inDays;
       final weeks = totalDays ~/ 7;
       final days = totalDays % 7;
       return '孕期 $weeks 周 $days 天';
     } else if (widget.config.childBirthDate != null &&
-        widget.entry.date.isBefore(widget.config.childBirthDate!)) {
+        _currentEntry.date.isBefore(widget.config.childBirthDate!)) {
       // 出生前记录但未配置受孕日期：显示出生前 X 月 X 天
-      final diff = widget.config.childBirthDate!.difference(widget.entry.date);
+      final diff = widget.config.childBirthDate!.difference(_currentEntry.date);
       final totalDays = diff.inDays;
       final months = totalDays ~/ 30; // 近似计算
       final days = totalDays % 30;
       return '出生前 $months 月 $days 天';
     } else {
       // 出生后记录：显示年龄
-      return widget.entry.getAgeLabel(widget.config.childBirthDate);
+      return _currentEntry.getAgeLabel(widget.config.childBirthDate);
     }
   }
 
-  void _showFullScreenVideo(String videoPath) {
+  void _showFullScreenVideo(int initialIndex) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => FullScreenVideoPlayer(
-          videoPath: videoPath,
+          videoPaths: _currentEntry.videoPaths,
           webdavService: widget.cloudService,
+          initialIndex: initialIndex,
         ),
       ),
     );
@@ -141,7 +146,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
   Future<void> _editDate() async {
     final DateTime? pickedDate = await showDatePicker(
       context: context,
-      initialDate: widget.entry.date,
+      initialDate: _currentEntry.date,
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) {
@@ -159,7 +164,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       },
     );
 
-    if (pickedDate != null && pickedDate != widget.entry.date) {
+    if (pickedDate != null && pickedDate != _currentEntry.date) {
       try {
         // 计算新的年龄月份
         final ageInMonths = widget.config.childBirthDate != null
@@ -169,14 +174,14 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
 
         // 创建更新后的entry
         final updatedEntry = DiaryEntry(
-          id: widget.entry.id,
-          title: widget.entry.title,
-          description: widget.entry.description,
+          id: _currentEntry.id,
+          title: _currentEntry.title,
+          description: _currentEntry.description,
           date: pickedDate,
-          imagePaths: widget.entry.imagePaths,
-          imageThumbnails: widget.entry.imageThumbnails,
-          videoPaths: widget.entry.videoPaths,
-          videoThumbnails: widget.entry.videoThumbnails,
+          imagePaths: _currentEntry.imagePaths,
+          imageThumbnails: _currentEntry.imageThumbnails,
+          videoPaths: _currentEntry.videoPaths,
+          videoThumbnails: _currentEntry.videoThumbnails,
           ageInMonths: ageInMonths,
         );
 
@@ -185,11 +190,18 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
 
         if (!mounted) return;
 
+        // 更新当前状态
+        setState(() {
+          _currentEntry = updatedEntry;
+        });
+
+        // 通知首页有更新
+        widget.onEntryUpdated
+            ?.call(EntryDetailResult.updated(updatedEntry), widget.entry);
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('日期修改成功')),
         );
-        // 返回上一页，让列表页面刷新
-        Navigator.pop(context, updatedEntry);
       } catch (e) {
         if (!mounted) return;
 
@@ -202,7 +214,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
 
   Future<void> _editDescription() async {
     final TextEditingController controller =
-        TextEditingController(text: widget.entry.description);
+        TextEditingController(text: _currentEntry.description);
 
     final String? newDescription = await showDialog<String>(
       context: context,
@@ -229,19 +241,19 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       ),
     );
 
-    if (newDescription != null && newDescription != widget.entry.description) {
+    if (newDescription != null && newDescription != _currentEntry.description) {
       try {
         // 创建更新后的entry
         final updatedEntry = DiaryEntry(
-          id: widget.entry.id,
-          title: widget.entry.title,
+          id: _currentEntry.id,
+          title: _currentEntry.title,
           description: newDescription,
-          date: widget.entry.date,
-          imagePaths: widget.entry.imagePaths,
-          imageThumbnails: widget.entry.imageThumbnails,
-          videoPaths: widget.entry.videoPaths,
-          videoThumbnails: widget.entry.videoThumbnails,
-          ageInMonths: widget.entry.ageInMonths,
+          date: _currentEntry.date,
+          imagePaths: _currentEntry.imagePaths,
+          imageThumbnails: _currentEntry.imageThumbnails,
+          videoPaths: _currentEntry.videoPaths,
+          videoThumbnails: _currentEntry.videoThumbnails,
+          ageInMonths: _currentEntry.ageInMonths,
         );
 
         // 保存到WebDAV
@@ -249,11 +261,18 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
 
         if (!mounted) return;
 
+        // 更新当前状态
+        setState(() {
+          _currentEntry = updatedEntry;
+        });
+
+        // 通知首页有更新
+        widget.onEntryUpdated
+            ?.call(EntryDetailResult.updated(updatedEntry), widget.entry);
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('描述修改成功')),
         );
-        // 返回上一页，让列表页面刷新
-        Navigator.pop(context, updatedEntry);
       } catch (e) {
         if (!mounted) return;
 
@@ -307,7 +326,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                 try {
                   await widget.cloudService.deleteEntry(widget.entry);
                   if (context.mounted) {
-                    Navigator.pop(context);
+                    Navigator.pop(context, EntryDetailResult.deleted());
                   }
                 } catch (e) {
                   if (context.mounted) {
@@ -348,7 +367,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${widget.entry.date.year}-${widget.entry.date.month.toString().padLeft(2, '0')}-${widget.entry.date.day.toString().padLeft(2, '0')}',
+                        '${_currentEntry.date.year}-${_currentEntry.date.month.toString().padLeft(2, '0')}-${_currentEntry.date.day.toString().padLeft(2, '0')}',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey.shade700,
@@ -364,27 +383,27 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                 ],
               ),
             ),
-            if (widget.entry.title.isNotEmpty) ...[
+            if (_currentEntry.title.isNotEmpty) ...[
               const SizedBox(height: 20),
               Text(
-                widget.entry.title,
+                _currentEntry.title,
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                 ),
               )
             ],
-            if (widget.entry.description.isNotEmpty) ...[
+            if (_currentEntry.description.isNotEmpty) ...[
               const SizedBox(height: 20),
               Text(
-                widget.entry.description,
+                _currentEntry.description,
                 style: const TextStyle(fontSize: 16, height: 1.5),
               ),
             ],
-            if (widget.entry.imagePaths.isNotEmpty) ...[
+            if (_currentEntry.imagePaths.isNotEmpty) ...[
               const SizedBox(height: 20),
               Text(
-                '${widget.entry.imagePaths.length} 张照片',
+                '${_currentEntry.imagePaths.length} 张照片',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -436,10 +455,10 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                 },
               ),
             ],
-            if (widget.entry.videoPaths.isNotEmpty) ...[
+            if (_currentEntry.videoPaths.isNotEmpty) ...[
               const SizedBox(height: 20),
               Text(
-                '${widget.entry.videoPaths.length} 个视频',
+                '${_currentEntry.videoPaths.length} 个视频',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade600,
@@ -454,16 +473,15 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                   crossAxisSpacing: 8,
                   mainAxisSpacing: 8,
                 ),
-                itemCount: widget.entry.videoPaths.length,
+                itemCount: _currentEntry.videoPaths.length,
                 itemBuilder: (context, index) {
-                  final path = widget.entry.videoPaths[index];
-                  final thumbnailPath = widget.entry.videoThumbnails[index];
+                  final thumbnailPath = _currentEntry.videoThumbnails[index];
                   final thumbnail = _videoThumbnailCache[thumbnailPath];
                   final isLoading =
                       _loadingVideoThumbnails[thumbnailPath] ?? false;
 
                   return GestureDetector(
-                    onTap: () => _showFullScreenVideo(path),
+                    onTap: () => _showFullScreenVideo(index),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.grey.shade200,

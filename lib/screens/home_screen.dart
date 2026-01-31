@@ -166,6 +166,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _handleEntryUpdate(
+      EntryDetailResult result, DiaryEntry originalEntry) async {
+    if (result.isDeleted) {
+      // 删除条目
+      setState(() {
+        _entries.removeWhere((entry) => entry.id == originalEntry.id);
+      });
+    } else if (result.updatedEntry != null) {
+      // 更新条目
+      setState(() {
+        final index =
+            _entries.indexWhere((entry) => entry.id == originalEntry.id);
+        if (index != -1) {
+          _entries[index] = result.updatedEntry!;
+        }
+      });
+    }
+  }
+
   Future<void> _switchConfig() async {
     // 重新初始化WebDAV服务
     await widget.cloudService.initialize(currentConfig);
@@ -901,7 +920,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         isLastInGroup: isLastInGroup && conceptionDate == null,
         config: currentConfig,
         webdavService: widget.cloudService,
-        onEntryUpdated: _loadEntries,
+        onEntryUpdated: _handleEntryUpdate,
         thumbnailCache: _thumbnailCache,
         thumbnailFutures: _thumbnailFutures,
       ));

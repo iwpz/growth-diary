@@ -235,7 +235,8 @@ class _FullScreenVideoPlayerState extends State<FullScreenVideoPlayer> {
     if (index > 0 && !_controllers.containsKey(index - 1)) {
       _initializeVideo(index - 1);
     }
-    if (index < widget.videoPaths.length - 1 && !_controllers.containsKey(index + 1)) {
+    if (index < widget.videoPaths.length - 1 &&
+        !_controllers.containsKey(index + 1)) {
       _initializeVideo(index + 1);
     }
   }
@@ -292,7 +293,8 @@ class _FullScreenVideoPlayerState extends State<FullScreenVideoPlayer> {
                         backgroundColor: Colors.transparent,
                         elevation: 0,
                         leading: IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
                           onPressed: () => Navigator.of(context).pop(),
                         ),
                         title: Text(
@@ -305,7 +307,8 @@ class _FullScreenVideoPlayerState extends State<FullScreenVideoPlayer> {
                             onPressed: _shareVideo,
                           ),
                           IconButton(
-                            icon: const Icon(Icons.download, color: Colors.white),
+                            icon:
+                                const Icon(Icons.download, color: Colors.white),
                             onPressed: _downloadVideo,
                           ),
                         ],
@@ -315,8 +318,8 @@ class _FullScreenVideoPlayerState extends State<FullScreenVideoPlayer> {
 
                       // 底部控制栏
                       Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [

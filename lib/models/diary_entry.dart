@@ -80,3 +80,22 @@ class DiaryEntry {
     }
   }
 }
+
+/// 详情页返回结果
+class EntryDetailResult {
+  final bool isDeleted;
+  final DiaryEntry? updatedEntry;
+
+  const EntryDetailResult({
+    this.isDeleted = false,
+    this.updatedEntry,
+  });
+
+  factory EntryDetailResult.updated(DiaryEntry entry) {
+    return EntryDetailResult(isDeleted: false, updatedEntry: entry);
+  }
+
+  factory EntryDetailResult.deleted() {
+    return EntryDetailResult(isDeleted: true, updatedEntry: null);
+  }
+}

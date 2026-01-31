@@ -13,7 +13,7 @@ class TimelineItem extends StatefulWidget {
   final bool isLastInGroup;
   final AppConfig config;
   final CloudStorageService webdavService;
-  final VoidCallback onEntryUpdated;
+  final void Function(EntryDetailResult, DiaryEntry) onEntryUpdated;
   final Map<String, Uint8List?> thumbnailCache;
   final Map<String, Future<Uint8List?>> thumbnailFutures;
 
@@ -108,9 +108,11 @@ class _TimelineItemState extends State<TimelineItem> {
                         entry: widget.entry,
                         config: widget.config,
                         cloudService: widget.webdavService,
+                        onEntryUpdated: widget.onEntryUpdated,
                       ),
                     ),
-                  ).then((_) => widget.onEntryUpdated());
+                  ).then((result) => widget.onEntryUpdated(
+                      result ?? const EntryDetailResult(), widget.entry));
                 },
                 child: Card(
                   elevation: 1,
