@@ -130,7 +130,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _showBackgroundUploadNotification();
         break;
       case AppLifecycleState.resumed:
-        // 应用回到前台时，检查是否有未完成的上传
+        // 应用回到前台时，重新加载最新的配置（包括生日、受孕日等）
+        _reloadLatestConfig();
+        // 检查是否有未完成的上传
         _checkPendingUploads();
         break;
       case AppLifecycleState.inactive:
@@ -510,11 +512,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _checkPendingUploads() {
+  Future<void> _checkPendingUploads() async {
     // 应用回到前台时，检查是否有未完成的上传
-    // 这里可以添加恢复上传状态的逻辑
-    // 目前由于我们使用的是异步上传，状态不会自动恢复
-    // 但我们可以显示一个提示，让用户知道之前的上传可能已被中断
+    // 更新上传进度显示
+    _updateUploadProgress();
   }
 
   void _onUploadCompleted() {
@@ -543,7 +544,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     int uploadedFilesCount = 0;
     for (final task in activeTasks) {
       totalUploadFiles += task.mediaPaths.length;
-      uploadedFilesCount += task.uploadedCount;
+      uploadedFilesCount = (task.uploadedCount / 4).floor();
     }
 
     final hasActiveTasks = activeTasks.isNotEmpty;
@@ -915,18 +916,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (isLastInGroup) {
         bool isPregnancyPeriod = currentConfig.conceptionDate != null &&
             entry.date.isBefore(birthDate ?? DateTime.now());
-        // Don't add separator for the last pregnancy group
-        bool isLastPregnancyGroup = (i == sortedEntries.length - 1 ||
-            !sortedEntries[i + 1].date.isAfter(birthDate ?? DateTime.now()));
-        if (!isLastPregnancyGroup) {
-          bool isLastGroupOverall = i == sortedEntries.length - 1;
-          items.add(GroupSeparator(
-              representativeEntry: entry,
-              isFirstGroup: isFirstGroup,
-              isLastGroup: isLastGroupOverall,
-              isPregnancyPeriod: isPregnancyPeriod,
-              config: currentConfig));
-          isFirstGroup = false;
+        // For pregnancy period, only skip separator if this is the last pregnancy entry
+        // and there are post-birth entries after it
+        bool shouldSkipSeparator = false;
+        if (isPregnancyPeriod && i < sortedEntries.length - 1) {
+          // Check if there are post-birth entries after this pregnancy group
+          bool hasPostBirthEntries = false;
+          for (int j = i + 1; j < sortedEntries.length; j++) {
+            if (sortedEntries[j].date.isAfter(birthDate ?? DateTime.now())) {
+              hasPostBirthEntries = true;
+              break;
+            }
+          }
+          shouldSkipSeparator = hasPostBirthEntries;
+        }
+
+        if (!shouldSkipSeparator) {
+          // Calculate display value to check if it's 0 (which we don't want to show)
+          final groupValue = entry.getGroupKey(currentConfig);
+          final displayValue = isPregnancyPeriod
+              ? groupValue
+              : (groupValue < 0 ? -groupValue + 1 : groupValue);
+
+          // Skip separator for 0 month
+          if (displayValue != 0) {
+            bool isLastGroupOverall = i == sortedEntries.length - 1;
+            items.add(GroupSeparator(
+                representativeEntry: entry,
+                isFirstGroup: isFirstGroup,
+                isLastGroup: isLastGroupOverall,
+                isPregnancyPeriod: isPregnancyPeriod,
+                config: currentConfig));
+            isFirstGroup = false;
+          }
         }
       }
 
@@ -1306,6 +1328,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _switchConfig();
         });
       }
+    }
+  }
+
+  /// 重新加载最新的配置（包括生日、受孕日等）
+  Future<void> _reloadLatestConfig() async {
+    try {
+      debugPrint('Reloading latest config from WebDAV...');
+
+      // 从WebDAV加载最新的配置
+      final webdavConfig = await widget.cloudService.loadConfig();
+
+      if (webdavConfig != null) {
+        debugPrint(
+            'Loaded updated config from WebDAV: ${webdavConfig.babyName}, birthDate: ${webdavConfig.babyBirthDate}, conceptionDate: ${webdavConfig.babyConceptionDate}');
+
+        // 更新本地配置
+        setState(() {
+          configs[currentConfigId] = webdavConfig;
+          currentConfig = webdavConfig;
+        });
+
+        // 保存到本地存储
+        await widget.localStorage.saveAllConfigs(configs);
+
+        debugPrint('Config reloaded successfully');
+      } else {
+        debugPrint('No updated config found on WebDAV');
+      }
+    } catch (e) {
+      debugPrint('Error reloading config: $e');
+      // 不显示错误给用户，因为这不是关键功能
     }
   }
 }

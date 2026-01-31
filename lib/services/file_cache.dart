@@ -33,13 +33,10 @@ class FileCache {
     final cacheFile = File('${_cacheDir!.path}/$cacheFileName');
 
     final exists = await cacheFile.exists();
-    debugPrint(
-        'Checking cache for key: $key at ${cacheFile.path}, exists: $exists');
 
     if (exists) {
       try {
         final data = await cacheFile.readAsBytes();
-        debugPrint('Cache hit for key: $key, size: ${data.length}');
         return data;
       } catch (e) {
         debugPrint('Error reading cache file for key: $key, error: $e');
@@ -63,8 +60,6 @@ class FileCache {
 
     try {
       await cacheFile.writeAsBytes(data);
-      debugPrint(
-          'Saved cache for key: $key to ${cacheFile.path}, size: ${data.length}');
 
       // 验证文件是否真的写入了
       final existsAfterWrite = await cacheFile.exists();

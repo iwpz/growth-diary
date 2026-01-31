@@ -8,6 +8,7 @@ class QRService {
   /// 生成包含完整配置信息的加密二维码数据
   static String generateEncryptedQRData(AppConfig config) {
     final configData = {
+      'id': config.id,
       'babyName': config.childName,
       'birthDate': config.childBirthDate?.toIso8601String(),
       'conceptionDate': config.conceptionDate?.toIso8601String(),
@@ -51,6 +52,7 @@ class QRService {
 
       // 构建AppConfig对象
       return AppConfig(
+        id: configData['id'] as String? ?? '',
         babyName: configData['babyName'] as String? ?? '',
         babyBirthDate: configData['birthDate'] != null
             ? DateTime.parse(configData['birthDate'] as String)
