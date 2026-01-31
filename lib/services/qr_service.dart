@@ -22,10 +22,10 @@ class QRService {
     final jsonString = jsonEncode(configData);
 
     // 使用简单的XOR加密
-    final encrypted = _xorEncrypt(jsonString, _encryptionKey);
+    final encryptedBytes = _xorEncrypt(jsonString, _encryptionKey);
 
     // 返回Base64编码的加密数据
-    return base64Encode(utf8.encode(encrypted));
+    return base64Encode(encryptedBytes);
   }
 
   /// 解码并解密二维码数据，返回AppConfig
@@ -33,10 +33,12 @@ class QRService {
     try {
       // Base64解码
       final encryptedBytes = base64Decode(qrData);
-      final encryptedString = utf8.decode(encryptedBytes);
 
       // XOR解密
-      final decryptedJson = _xorDecrypt(encryptedString, _encryptionKey);
+      final decryptedBytes = _xorDecrypt(encryptedBytes, _encryptionKey);
+
+      // UTF-8解码
+      final decryptedJson = utf8.decode(decryptedBytes);
 
       // 解析JSON
       final configData = jsonDecode(decryptedJson) as Map<String, dynamic>;
@@ -66,8 +68,8 @@ class QRService {
     }
   }
 
-  /// 简单的XOR加密
-  static String _xorEncrypt(String text, String key) {
+  /// 简单的XOR加密，返回字节数组
+  static List<int> _xorEncrypt(String text, String key) {
     final textBytes = utf8.encode(text);
     final keyBytes = utf8.encode(key);
     final result = List<int>.filled(textBytes.length, 0);
@@ -76,12 +78,19 @@ class QRService {
       result[i] = textBytes[i] ^ keyBytes[i % keyBytes.length];
     }
 
-    return String.fromCharCodes(result);
+    return result;
   }
 
-  /// XOR解密（与加密使用相同的方法）
-  static String _xorDecrypt(String encryptedText, String key) {
-    return _xorEncrypt(encryptedText, key);
+  /// XOR解密，返回字节数组
+  static List<int> _xorDecrypt(List<int> encryptedBytes, String key) {
+    final keyBytes = utf8.encode(key);
+    final result = List<int>.filled(encryptedBytes.length, 0);
+
+    for (int i = 0; i < encryptedBytes.length; i++) {
+      result[i] = encryptedBytes[i] ^ keyBytes[i % keyBytes.length];
+    }
+
+    return result;
   }
 
   /// 验证二维码数据是否有效
