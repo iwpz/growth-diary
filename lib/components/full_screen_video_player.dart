@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:media_store_plus/media_store_plus.dart';
 import '../services/cloud_storage_service.dart';
+import '../services/media_service.dart';
 
 class FullScreenVideoPlayer extends StatefulWidget {
   final String videoPath;
@@ -118,65 +116,29 @@ class _FullScreenVideoPlayerState extends State<FullScreenVideoPlayer> {
   }
 
   Future<void> _shareVideo() async {
-    try {
-      final tempFile = await widget.webdavService
-          .saveToTempFile(widget.videoPath, null); // 视频文件应该已经存在于临时目录中
-      if (tempFile != null) {
-        await Share.shareXFiles([XFile(tempFile.path)]);
-      }
-    } catch (e) {
-      debugPrint('Error sharing video: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('分享视频失败')),
-        );
-      }
+    final success = await MediaService.shareVideo(
+      videoPath: widget.videoPath,
+      cloudService: widget.webdavService,
+    );
+
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('分享视频失败')),
+      );
     }
   }
 
   Future<void> _downloadVideo() async {
-    try {
-      final videoData =
-          await widget.webdavService.downloadMedia(widget.videoPath);
-      if (videoData != null) {
-        await MediaStore.ensureInitialized();
-        final mediaStore = MediaStore();
+    final result = await MediaService.downloadVideo(
+      videoPath: widget.videoPath,
+      cloudService: widget.webdavService,
+    );
 
-        // 设置应用文件夹为 Growth Diary
-        MediaStore.appFolder = 'Growth Diary';
-
-        final fileName = widget.videoPath.split('/').last;
-
-        // 保存视频到下载目录的 Growth Diary 文件夹
-        final result = await mediaStore.saveFile(
-          tempFilePath: await _saveVideoToTempFile(videoData),
-          dirType: DirType.download,
-          dirName: DirName.download,
-        );
-
-        if (result != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('视频已保存到下载目录: Growth Diary/$fileName')),
-          );
-        } else {
-          throw Exception('保存失败');
-        }
-      }
-    } catch (e) {
-      debugPrint('Error downloading video: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('保存视频失败，请检查存储权限')),
-        );
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
     }
-  }
-
-  Future<String> _saveVideoToTempFile(Uint8List data) async {
-    final tempDir = await getTemporaryDirectory();
-    final tempFile = File('${tempDir.path}/temp_video.mp4');
-    await tempFile.writeAsBytes(data);
-    return tempFile.path;
   }
 
   String _formatDuration(Duration duration) {

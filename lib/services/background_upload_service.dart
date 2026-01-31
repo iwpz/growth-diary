@@ -142,6 +142,19 @@ class BackgroundUploadService {
       print('📱 Android通知权限: ${granted == true ? '已授予' : '未授予'}');
     }
 
+    // 请求iOS通知权限
+    final iosPlugin =
+        _notificationsPlugin.resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>();
+    if (iosPlugin != null) {
+      final granted = await iosPlugin.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      print('🍎 iOS通知权限: ${granted == true ? '已授予' : '未授予'}');
+    }
+
     // 创建通知渠道 - 使用更高的优先级确保可见性
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       notificationChannelId,

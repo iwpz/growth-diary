@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
-import 'dart:io';
-import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:media_store_plus/media_store_plus.dart';
 import '../services/cloud_storage_service.dart';
+import '../services/media_service.dart';
 
 class FullScreenImageView extends StatefulWidget {
   final List<String> imagePaths;
@@ -45,19 +42,16 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
   Future<void> _shareImage() async {
     final imageData = _fullImageCache[_currentIndex];
     if (imageData != null) {
-      try {
-        final tempFile = await widget.webdavService
-            .saveToTempFile(widget.imagePaths[_currentIndex], imageData);
-        if (tempFile != null) {
-          await Share.shareXFiles([XFile(tempFile.path)]);
-        }
-      } catch (e) {
-        debugPrint('Error sharing image: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('分享图片失败')),
-          );
-        }
+      final success = await MediaService.shareImage(
+        imagePath: widget.imagePaths[_currentIndex],
+        imageData: imageData,
+        cloudService: widget.webdavService,
+      );
+
+      if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('分享图片失败')),
+        );
       }
     }
   }
@@ -65,45 +59,18 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
   Future<void> _downloadImage() async {
     final imageData = _fullImageCache[_currentIndex];
     if (imageData != null) {
-      try {
-        await MediaStore.ensureInitialized();
-        final mediaStore = MediaStore();
+      final result = await MediaService.downloadImage(
+        imagePath: widget.imagePaths[_currentIndex],
+        imageData: imageData,
+        cloudService: widget.webdavService,
+      );
 
-        // 设置应用文件夹为 Growth Diary
-        MediaStore.appFolder = 'Growth Diary';
-
-        final fileName = widget.imagePaths[_currentIndex].split('/').last;
-
-        // 保存图片到下载目录的 Growth Diary 文件夹
-        final result = await mediaStore.saveFile(
-          tempFilePath: await _saveImageToTempFile(imageData),
-          dirType: DirType.download,
-          dirName: DirName.download,
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result.message)),
         );
-
-        if (result != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('图片已保存到下载目录: Growth Diary/$fileName')),
-          );
-        } else {
-          throw Exception('保存失败');
-        }
-      } catch (e) {
-        debugPrint('Error downloading image: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('保存图片失败，请检查存储权限')),
-          );
-        }
       }
     }
-  }
-
-  Future<String> _saveImageToTempFile(Uint8List data) async {
-    final tempDir = await getTemporaryDirectory();
-    final tempFile = File('${tempDir.path}/temp_image.jpg');
-    await tempFile.writeAsBytes(data);
-    return tempFile.path;
   }
 
   Future<void> _loadFullImage(int index) async {

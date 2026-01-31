@@ -28,6 +28,7 @@ dependencies:
   flutter_local_notifications: ^17.0.0
   share_plus: ^9.0.0
   media_store_plus: ^0.1.0
+  photo_manager: ^3.8.3
 
 
 

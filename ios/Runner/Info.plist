@@ -43,10 +43,15 @@
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>需要访问相册以选择照片</string>
-	<key>NSCameraUsageDescription</key>
-	<string>需要访问相机以拍摄照片</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>需要访问麦克风以录制视频</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要保存下载的图片和视频到您的相册中</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>需要发送通知以提醒重要事件</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
