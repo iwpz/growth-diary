@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/app_config.dart';
-import '../services/webdav_service.dart';
+import '../services/cloud_storage_service.dart';
 import '../services/local_storage_service.dart';
 import 'setup_screen.dart';
 import 'webdav_config_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AppConfig config;
-  final WebDAVService webdavService;
+  final CloudStorageService webdavService;
   final Function(AppConfig) onConfigChanged;
 
   const SettingsScreen({
@@ -112,6 +112,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('受孕日已更新')),
         );
+      }
+    }
+  }
+
+  Future<void> _clearCache() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清除缓存'),
+        content: const Text('这将删除所有已缓存的媒体文件。确定继续吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      // 显示loading对话框
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('正在清除缓存...'),
+            ],
+          ),
+        ),
+      );
+
+      try {
+        await widget.webdavService.clearCache();
+
+        // 关闭loading对话框
+        if (mounted) {
+          Navigator.of(context).pop(); // 关闭loading对话框
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('缓存已清除')),
+          );
+        }
+      } catch (e) {
+        // 关闭loading对话框
+        if (mounted) {
+          Navigator.of(context).pop(); // 关闭loading对话框
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('清除缓存失败: $e')),
+          );
+        }
       }
     }
   }
@@ -221,6 +280,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: Icon(Icons.info),
             title: Text('关于'),
             subtitle: Text('成长日记 v1.0.0'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cleaning_services, color: Colors.orange),
+            title: const Text('清除缓存'),
+            subtitle: const Text('清除已下载的媒体文件缓存'),
+            onTap: _clearCache,
           ),
           ListTile(
             leading: const Icon(Icons.edit, color: Colors.blue),

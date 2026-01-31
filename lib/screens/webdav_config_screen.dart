@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import '../models/app_config.dart';
-import '../services/webdav_service.dart';
+import '../services/cloud_storage_service.dart';
 import '../services/local_storage_service.dart';
 
 enum WebDAVConfigMode {
@@ -12,7 +12,7 @@ enum WebDAVConfigMode {
 class WebDAVConfigScreen extends StatefulWidget {
   final WebDAVConfigMode mode;
   final AppConfig? config; // setup模式下可为null，settings模式下必填
-  final WebDAVService? webdavService; // settings模式下需要
+  final CloudStorageService? webdavService; // settings模式下需要
   final Function(AppConfig)? onConfigChanged; // settings模式下的回调
 
   const WebDAVConfigScreen({

@@ -5,13 +5,13 @@ import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/diary_entry.dart';
 import '../models/app_config.dart';
-import '../services/webdav_service.dart';
+import '../services/cloud_storage_service.dart';
 import '../utils/age_calculator.dart';
 
 class EntryDetailScreen extends StatefulWidget {
   final DiaryEntry entry;
   final AppConfig config;
-  final WebDAVService webdavService;
+  final CloudStorageService webdavService;
 
   const EntryDetailScreen({
     super.key,
@@ -478,7 +478,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
 
 class FullScreenImageView extends StatefulWidget {
   final List<String> imagePaths;
-  final WebDAVService webdavService;
+  final CloudStorageService webdavService;
   final int initialIndex;
 
   const FullScreenImageView({
@@ -596,7 +596,7 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
 
 class FullScreenVideoPlayer extends StatefulWidget {
   final String videoPath;
-  final WebDAVService webdavService;
+  final CloudStorageService webdavService;
 
   const FullScreenVideoPlayer({
     super.key,

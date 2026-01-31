@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/app_config.dart';
 import '../services/entry_creation_service.dart';
-import '../services/webdav_service.dart';
+import '../services/cloud_storage_service.dart';
 
 class DiaryEditorScreen extends StatefulWidget {
   final AppConfig config;
-  final WebDAVService webdavService;
+  final CloudStorageService webdavService;
 
   const DiaryEditorScreen({
     super.key,

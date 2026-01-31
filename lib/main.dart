@@ -4,6 +4,7 @@ import 'screens/home_screen.dart';
 import 'screens/setup_screen.dart';
 import 'services/local_storage_service.dart';
 import 'services/webdav_service.dart';
+import 'services/cloud_storage_service.dart';
 import 'services/background_upload_service.dart';
 
 void main() {
@@ -49,7 +50,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   final LocalStorageService _localStorage = LocalStorageService();
-  final WebDAVService _webdavService = WebDAVService();
+  final CloudStorageService _webdavService = WebDAVService();
 
   @override
   void initState() {
@@ -70,10 +71,15 @@ class _SplashScreenState extends State<SplashScreen> {
     final configs = await _localStorage.loadAllConfigs();
     final currentConfigId = await _localStorage.getCurrentConfigId();
 
+    debugPrint('Loaded configs: ${configs.keys}');
+    debugPrint('Current config id: $currentConfigId');
+
     if (configs.isNotEmpty) {
       // 如果有配置，选择当前配置或第一个配置
       final configId = currentConfigId ?? configs.keys.first;
       final config = configs[configId]!;
+
+      debugPrint('Using config id: $configId, webdavUrl: ${config.webdavUrl}');
 
       try {
         // Initialize WebDAV service
@@ -82,6 +88,8 @@ class _SplashScreenState extends State<SplashScreen> {
         // Try to load config from WebDAV (might have been updated)
         final webdavConfig = await _webdavService.loadConfig();
         final finalConfig = webdavConfig ?? config;
+
+        debugPrint('WebDAV config loaded: ${webdavConfig != null}');
 
         // 更新配置到configs中
         configs[configId] = finalConfig;

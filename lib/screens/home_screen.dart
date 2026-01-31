@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
-import '../services/webdav_service.dart';
+import '../services/cloud_storage_service.dart';
 import '../services/background_upload_service.dart';
 import '../utils/age_calculator.dart';
 import '../services/local_storage_service.dart';
@@ -17,7 +17,7 @@ import 'diary_editor_screen.dart';
 class HomeScreen extends StatefulWidget {
   final Map<String, AppConfig> configs;
   final String currentConfigId;
-  final WebDAVService webdavService;
+  final CloudStorageService webdavService;
   final LocalStorageService localStorage;
 
   const HomeScreen({
@@ -37,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _hasMoreData = true;
+  String? _errorMessage;
   final Map<String, Uint8List?> _thumbnailCache = {};
   final Map<String, Future<Uint8List?>> _thumbnailFutures = {};
   bool _isExpanded = false;
@@ -124,28 +125,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadEntries() async {
+    debugPrint('Loading entries...');
     setState(() {
       _isLoading = true;
       _entries.clear();
       _hasMoreData = true;
+      _errorMessage = null;
     });
 
     try {
       final entries = await widget.webdavService.loadAllEntries();
+      debugPrint('Loaded ${entries.length} entries');
       setState(() {
         _entries = entries;
         _isLoading = false;
         _hasMoreData = entries.length == _pageSize;
       });
     } catch (e) {
+      debugPrint('Error loading entries: $e');
       setState(() {
         _isLoading = false;
+        _errorMessage = e.toString();
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('加载失败: $e')),
-        );
-      }
     }
   }
 
@@ -588,6 +589,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         children: [
           if (_isLoading)
             const Center(child: CircularProgressIndicator())
+          else if (_errorMessage != null)
+            _buildErrorState()
           else if (_entries.isEmpty)
             _buildEmptyState()
           else
@@ -652,6 +655,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 100,
+            color: Colors.red.shade300,
+          ),
+          const SizedBox(height: 20),
+          Text(
+            '加载失败',
+            style: TextStyle(
+              fontSize: 20,
+              color: Colors.red.shade600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              _errorMessage ?? '未知错误',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _loadEntries,
+            child: const Text('重试'),
           ),
         ],
       ),

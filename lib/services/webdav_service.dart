@@ -6,10 +6,13 @@ import 'package:image/image.dart' as img;
 import 'package:video_thumbnail/video_thumbnail.dart';
 import '../models/diary_entry.dart';
 import '../models/app_config.dart';
+import 'cloud_storage_service.dart';
+import 'file_cache.dart';
 
-class WebDAVService {
+class WebDAVService implements CloudStorageService {
   webdav.Client? _client;
   String? _id;
+  final FileCache _fileCache = FileCache();
 
   String _getBasePath() => 'growth_diary/$_id';
 
@@ -22,19 +25,25 @@ class WebDAVService {
   String _getThumbnailsPath(String fileName) =>
       '${_getBasePath()}/thumbnails/$fileName';
 
+  @override
   Future<void> initialize(AppConfig config) async {
+    debugPrint(
+        'Initializing WebDAV for id: ${config.id}, url: ${config.webdavUrl}');
     if (config.webdavUrl.isNotEmpty && config.username.isNotEmpty) {
       _client = webdav.newClient(
         config.webdavUrl,
         user: config.username,
         password: config.password,
-        debug: true,
+        debug: false,
       );
       _client!.setConnectTimeout(8000);
       _client!.setSendTimeout(8000);
       _client!.setReceiveTimeout(8000);
 
       _id = config.id;
+
+      // 初始化文件缓存
+      await _fileCache.initialize();
 
       // Create base directories if they don't exist
       final baseDir = _getBasePath();
@@ -65,6 +74,7 @@ class WebDAVService {
     }
   }
 
+  @override
   Future<void> saveConfig(AppConfig config) async {
     if (_client == null || _id == null) return;
 
@@ -80,6 +90,7 @@ class WebDAVService {
     }
   }
 
+  @override
   Future<AppConfig?> loadConfig() async {
     if (_client == null || _id == null) return null;
 
@@ -93,6 +104,7 @@ class WebDAVService {
     }
   }
 
+  @override
   Future<void> saveDiaryEntry(DiaryEntry entry) async {
     if (_client == null || _id == null) return;
 
@@ -108,36 +120,58 @@ class WebDAVService {
     }
   }
 
-  Future<List<DiaryEntry>> loadAllEntries() async {
-    if (_client == null || _id == null) return [];
+  Future<List<DiaryEntry>> _loadEntriesFromDirectory() async {
+    final files = await _client!.readDir(_getEntriesPath());
+    final entries = <DiaryEntry>[];
 
-    try {
-      final files = await _client!.readDir(_getEntriesPath());
-      final entries = <DiaryEntry>[];
-
-      for (var file in files) {
-        if (file.name != null && file.name!.endsWith('.json')) {
-          try {
-            final content =
-                await _client!.read('${_getEntriesPath()}/${file.name}');
-            final jsonData = jsonDecode(utf8.decode(content));
-            final entry = DiaryEntry.fromJson(jsonData);
-            entries.add(entry);
-          } catch (e) {
-            debugPrint('Error loading entry ${file.name}: $e');
-          }
+    for (var file in files) {
+      if (file.name != null && file.name!.endsWith('.json')) {
+        try {
+          final content =
+              await _client!.read('${_getEntriesPath()}/${file.name}');
+          final jsonData = jsonDecode(utf8.decode(content));
+          final entry = DiaryEntry.fromJson(jsonData);
+          entries.add(entry);
+        } catch (e) {
+          debugPrint('Error loading entry ${file.name}: $e');
         }
       }
+    }
 
-      // Sort by date descending
-      entries.sort((a, b) => b.date.compareTo(a.date));
-      return entries;
+    // Sort by date descending
+    entries.sort((a, b) => b.date.compareTo(a.date));
+    return entries;
+  }
+
+  @override
+  Future<List<DiaryEntry>> loadAllEntries() async {
+    debugPrint(
+        'Loading entries for id: $_id, client initialized: ${_client != null}');
+    if (_client == null || _id == null) return [];
+
+    // 等待一小段时间，确保连接稳定
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    try {
+      return await _loadEntriesFromDirectory();
     } catch (e) {
       debugPrint('Error loading entries: $e');
+      // 如果是认证错误，等待更长时间后重试一次
+      if (e.toString().contains('401') ||
+          e.toString().contains('Unauthorized')) {
+        debugPrint('Retrying after authentication error...');
+        await Future.delayed(const Duration(milliseconds: 500));
+        try {
+          return await _loadEntriesFromDirectory();
+        } catch (retryError) {
+          debugPrint('Retry also failed: $retryError');
+        }
+      }
       return [];
     }
   }
 
+  @override
   Future<List<DiaryEntry>> loadEntriesPage(int offset, int limit) async {
     if (_client == null || _id == null) return [];
 
@@ -179,7 +213,15 @@ class WebDAVService {
     }
   }
 
+  @override
   Future<Uint8List?> downloadMedia(String path) async {
+    // 检查缓存
+    final cachedData = await _fileCache.get(path);
+    if (cachedData != null) {
+      debugPrint('Cache hit for media: $path');
+      return cachedData;
+    }
+
     if (_client == null) return null;
 
     try {
@@ -187,13 +229,20 @@ class WebDAVService {
       final fullPath =
           path.startsWith('growth_diary/') ? path : '${_getBasePath()}/$path';
       final data = await _client!.read(fullPath);
-      return Uint8List.fromList(data);
+      final result = Uint8List.fromList(data);
+
+      // 保存到缓存
+      await _fileCache.put(path, result);
+      debugPrint('Downloaded and cached media: $path');
+
+      return result;
     } catch (e) {
       debugPrint('Error downloading media: $e');
       return null;
     }
   }
 
+  @override
   Future<String> uploadMedia(File file, String fileName) async {
     if (_client == null || _id == null) {
       throw Exception('WebDAV client not initialized');
@@ -209,6 +258,7 @@ class WebDAVService {
     }
   }
 
+  @override
   Future<String> uploadImageWithThumbnails(File file, String fileName) async {
     if (_client == null || _id == null) {
       throw Exception('WebDAV client not initialized');
@@ -245,6 +295,7 @@ class WebDAVService {
     }
   }
 
+  @override
   Future<String> uploadVideoWithThumbnails(File file, String fileName) async {
     if (_client == null || _id == null) {
       throw Exception('WebDAV client not initialized');
@@ -298,6 +349,7 @@ class WebDAVService {
     }
   }
 
+  @override
   Future<void> deleteEntry(DiaryEntry entry) async {
     if (_client == null || _id == null) return;
 
@@ -331,5 +383,11 @@ class WebDAVService {
     }
   }
 
+  @override
   bool get isInitialized => _client != null;
+
+  @override
+  Future<void> clearCache() async {
+    await _fileCache.clear();
+  }
 }

@@ -5,13 +5,14 @@ import 'package:exif/exif.dart';
 import 'package:crypto/crypto.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
-import '../services/webdav_service.dart';
+
+import '../services/cloud_storage_service.dart';
 import '../utils/age_calculator.dart';
 
 typedef UploadProgressCallback = void Function(int uploaded, int total);
 
 class EntryCreationService {
-  final WebDAVService webdavService;
+  final CloudStorageService webdavService;
 
   EntryCreationService(this.webdavService);
 
