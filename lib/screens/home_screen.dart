@@ -10,6 +10,7 @@ import '../services/cloud_storage_service.dart';
 import '../services/background_upload_service.dart';
 import '../utils/age_calculator.dart';
 import '../services/local_storage_service.dart';
+import '../services/qr_service.dart';
 import 'settings_screen.dart';
 import 'diary_editor_screen.dart';
 import '../components/birth_date_label.dart';
@@ -17,6 +18,7 @@ import '../components/pregnancy_label.dart';
 import '../components/current_month_separator.dart';
 import '../components/group_separator.dart';
 import '../components/timeline_item.dart';
+import 'qr_scanner_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, AppConfig> configs;
@@ -1031,6 +1033,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<AppConfig?> _scanQRCodeForBaby() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const QRScannerScreen(),
+      ),
+    );
+
+    if (result != null && result is String) {
+      // 尝试解码二维码数据
+      final importedConfig = QRService.decodeEncryptedQRData(result);
+
+      if (importedConfig != null) {
+        // 显示确认对话框
+        final shouldImport = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('确认导入配置'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('宝宝昵称: ${importedConfig.babyName}'),
+                Text(
+                    '出生日期: ${importedConfig.babyBirthDate?.toString().split(' ')[0] ?? '未设置'}'),
+                Text(
+                    '受孕日期: ${importedConfig.babyConceptionDate?.toString().split(' ')[0] ?? '未设置'}'),
+                const SizedBox(height: 10),
+                const Text(
+                  '导入后将使用此宝宝信息，确定继续吗？',
+                  style: TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('导入'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldImport == true) {
+          return importedConfig;
+        }
+      } else {
+        // 无效的二维码
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('无效的二维码数据')),
+          );
+        }
+      }
+    }
+    return null;
+  }
+
   Future<void> _showAddBabyDialog() async {
     String babyName = '';
     DateTime? birthDate;
@@ -1046,11 +1111,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // 扫码导入按钮
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final importedConfig = await _scanQRCodeForBaby();
+                    if (importedConfig != null) {
+                      setState(() {
+                        babyName = importedConfig.babyName ?? '';
+                        birthDate = importedConfig.babyBirthDate;
+                        conceptionDate = importedConfig.babyConceptionDate;
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('扫码导入配置'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.pink,
+                    side: const BorderSide(color: Colors.pink),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '或手动输入',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
                 TextField(
                   decoration: const InputDecoration(
                     labelText: '宝宝姓名',
                     hintText: '请输入宝宝姓名',
                   ),
+                  controller: TextEditingController(text: babyName),
                   onChanged: (value) => babyName = value,
                 ),
                 const SizedBox(height: 16),

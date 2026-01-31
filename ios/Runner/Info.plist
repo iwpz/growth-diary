@@ -45,6 +45,8 @@
 		<string>需要访问相册以选择照片</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>需要保存下载的图片和视频到您的相册中</string>
+		<key>NSCameraUsageDescription</key>
+		<string>需要访问相机以扫描二维码导入配置</string>
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>fetch</string>

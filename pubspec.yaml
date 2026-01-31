@@ -32,6 +32,9 @@ dependencies:
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.7
   flutter_svg: ^2.2.3
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.1.4
+  screenshot: ^3.0.0
 
 dev_dependencies:
   flutter_test:

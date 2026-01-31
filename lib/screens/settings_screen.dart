@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:screenshot/screenshot.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'dart:io';
 import '../models/app_config.dart';
 import '../services/cloud_storage_service.dart';
 import '../services/local_storage_service.dart';
+import '../services/qr_service.dart';
 import 'setup_screen.dart';
 import 'webdav_config_screen.dart';
 
@@ -23,12 +30,116 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final LocalStorageService _localStorage = LocalStorageService();
+  final ScreenshotController _screenshotController = ScreenshotController();
   late AppConfig _config;
 
   @override
   void initState() {
     super.initState();
     _config = widget.config;
+  }
+
+  Future<void> _showQRCode() async {
+    // 使用QRService生成加密的二维码数据
+    final qrData = QRService.generateEncryptedQRData(_config);
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Screenshot(
+              controller: _screenshotController,
+              child: Container(
+                color: const Color(0xFFFCE4EC), // 粉色背景
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Logo
+                    SvgPicture.asset(
+                      'assets/images/logo.svg',
+                      height: 48,
+                      width: 48,
+                      colorFilter: const ColorFilter.mode(
+                        Color(0xFFE91E63), // 粉红色
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // 标题：宝宝名成长日记
+                    Text(
+                      '${_config.babyName}成长日记',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFE91E63), // 粉红色
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    // 二维码
+                    QrImageView(
+                      data: qrData,
+                      version: QrVersions.auto,
+                      size: 200.0,
+                      errorCorrectionLevel: QrErrorCorrectLevel.M,
+                    ),
+                    const SizedBox(height: 20),
+                    // 说明文字
+                    const Text(
+                      '扫描二维码导入配置',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFFAD1457), // 深粉色
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () async {
+              try {
+                // 生成二维码图片
+                final image = await _screenshotController.capture();
+                if (image != null) {
+                  // 保存到临时文件
+                  final tempDir = await getTemporaryDirectory();
+                  final file = File('${tempDir.path}/baby_config_qr.png');
+                  await file.writeAsBytes(image);
+
+                  // 分享图片
+                  await Share.shareXFiles(
+                    [XFile(file.path)],
+                    text: '${_config.babyName}成长日记 - 扫码导入配置',
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('分享失败，请重试')),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.share),
+            label: const Text('分享'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showEditChildNameDialog() async {
@@ -251,10 +362,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: _editConceptionDate,
           ),
           const Divider(),
-          _buildSection('WebDAV 配置'),
+          _buildSection('云存储配置'),
           ListTile(
             leading: const Icon(Icons.cloud),
-            title: const Text('WebDAV 配置'),
+            title: const Text('WebDAV'),
             subtitle: Text('${_config.webdavUrl} (${_config.username})'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
@@ -276,10 +387,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
           _buildSection('应用'),
-          const ListTile(
-            leading: Icon(Icons.info),
-            title: Text('关于'),
-            subtitle: Text('成长日记 v1.0.0'),
+          ListTile(
+            leading: const Icon(Icons.qr_code, color: Colors.green),
+            title: const Text('导出配置二维码'),
+            subtitle: const Text('生成包含宝宝配置信息的二维码'),
+            onTap: _showQRCode,
           ),
           ListTile(
             leading: const Icon(Icons.cleaning_services, color: Colors.orange),
@@ -291,6 +403,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.edit, color: Colors.blue),
             title: const Text('重新配置'),
             onTap: _resetConfiguration,
+          ),
+          const ListTile(
+            leading: Icon(Icons.info),
+            title: Text('关于'),
+            subtitle: Text('成长日记 v1.0.0'),
           ),
         ],
       ),

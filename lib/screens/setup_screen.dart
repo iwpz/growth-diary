@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/app_config.dart';
 import '../services/local_storage_service.dart';
 import '../services/webdav_service.dart';
+import '../services/qr_service.dart';
 import 'home_screen.dart';
 import 'webdav_config_screen.dart';
+import 'qr_scanner_screen.dart';
 
 class SetupScreen extends StatefulWidget {
   final LocalStorageService? localStorage;
@@ -46,12 +48,122 @@ class _SetupScreenState extends State<SetupScreen> {
     }
   }
 
+  Future<void> _scanQRCode() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const QRScannerScreen(),
+      ),
+    );
+
+    if (result != null && result is String) {
+      // 尝试解码二维码数据
+      final importedConfig = QRService.decodeEncryptedQRData(result);
+
+      if (importedConfig != null) {
+        // 显示确认对话框
+        final shouldImport = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('确认导入配置'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('宝宝昵称: ${importedConfig.babyName}'),
+                Text(
+                    '出生日期: ${importedConfig.babyBirthDate?.toString().split(' ')[0] ?? '未设置'}'),
+                Text(
+                    '受孕日期: ${importedConfig.conceptionDate?.toString().split(' ')[0] ?? '未设置'}'),
+                Text('WebDAV服务器: ${importedConfig.webdavUrl}'),
+                Text('用户名: ${importedConfig.username}'),
+                const Text('密码: ***（已加密存储）'),
+                const SizedBox(height: 10),
+                const Text(
+                  '导入后将使用此配置，确定继续吗？',
+                  style: TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('导入'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldImport == true) {
+          // 导入配置并跳转到主界面
+          await _importAndNavigate(importedConfig);
+        }
+      } else {
+        // 无效的二维码
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('无效的二维码数据')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _importAndNavigate(AppConfig importedConfig) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final webdavService = WebDAVService();
+      final localStorage = widget.localStorage ?? LocalStorageService();
+
+      // Initialize WebDAV with imported config
+      await webdavService.initialize(importedConfig);
+
+      // Save config to WebDAV
+      await webdavService.saveConfig(importedConfig);
+
+      // Save config locally
+      await localStorage.saveConfig(importedConfig);
+      await localStorage.setCurrentConfigId(importedConfig.id);
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(
+            configs: {importedConfig.id: importedConfig},
+            currentConfigId: importedConfig.id,
+            cloudService: webdavService,
+            localStorage: localStorage,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('导入失败: $e')),
+      );
+    }
+  }
+
   Future<void> _selectConceptionDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 280)), // 预产期大约280天
+      lastDate: DateTime.now(),
       helpText: '选择受孕日期',
     );
     if (picked != null) {
@@ -198,7 +310,32 @@ class _SetupScreenState extends State<SetupScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
+              // 导入配置按钮
+              OutlinedButton.icon(
+                onPressed: _scanQRCode,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('导入配置'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.pink,
+                  side: const BorderSide(color: Colors.pink),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                '或',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
