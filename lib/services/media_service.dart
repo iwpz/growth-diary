@@ -20,7 +20,9 @@ class MediaService {
     try {
       final tempFile = await cloudService.saveToTempFile(imagePath, imageData);
       if (tempFile != null) {
-        await Share.shareXFiles([XFile(tempFile.path)]);
+        await SharePlus.instance.share(
+          ShareParams(files: [XFile(tempFile.path)]),
+        );
         return true;
       }
       return false;
@@ -38,7 +40,9 @@ class MediaService {
     try {
       final tempFile = await cloudService.saveToTempFile(videoPath, null);
       if (tempFile != null) {
-        await Share.shareXFiles([XFile(tempFile.path)]);
+        await SharePlus.instance.share(
+          ShareParams(files: [XFile(tempFile.path)]),
+        );
         return true;
       }
       return false;

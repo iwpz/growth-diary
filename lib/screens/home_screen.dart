@@ -556,20 +556,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // 直接从服务获取最新的上传任务状态
-    final allTasks = BackgroundUploadService.getAllUploadTasks();
-    final activeTasks = allTasks
-        .where((task) => task.status == UploadStatus.uploading)
-        .toList();
-
-    // 计算当前上传进度
-    int totalUploadFiles = 0;
-    int uploadedFilesCount = 0;
-    for (final task in activeTasks) {
-      totalUploadFiles += task.mediaPaths.length;
-      uploadedFilesCount += task.uploadedCount;
-    }
-
     return Scaffold(
       appBar: AppBar(
         leading: Builder(
@@ -1092,6 +1078,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         builder: (context) => const QRScannerScreen(),
       ),
     );
+
+    if (!mounted) return null;
 
     if (result != null && result is String) {
       // 尝试解码二维码数据

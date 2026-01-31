@@ -48,14 +48,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Screenshot(
               controller: _screenshotController,
               child: Container(
-                color: const Color(0xFFFCE4EC), // 粉色背景
-                padding: const EdgeInsets.all(24),
+                color: Colors.white, // 白色背景
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -80,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 10),
                     // 二维码
                     QrImageView(
                       data: qrData,
@@ -88,7 +89,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       size: 200.0,
                       errorCorrectionLevel: QrErrorCorrectLevel.M,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 5),
                     // 说明文字
                     const Text(
                       '扫描二维码导入配置',
@@ -117,13 +118,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   await file.writeAsBytes(image);
 
                   // 分享图片
-                  await Share.shareXFiles(
-                    [XFile(file.path)],
-                    text: '${_config.babyName}成长日记 - 扫码导入配置',
+                  await SharePlus.instance.share(
+                    ShareParams(
+                      text: '${_config.babyName}成长日记 - 扫码导入配置',
+                      files: [XFile(file.path)],
+                    ),
                   );
                 }
               } catch (e) {
                 if (mounted) {
+                  // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('分享失败，请重试')),
                   );

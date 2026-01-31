@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import '../models/app_config.dart';
 
 class QRService {

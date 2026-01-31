@@ -114,7 +114,7 @@ class BackgroundUploadService {
   static Future<void> initialize() async {
     // 初始化通知插件
     const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/launcher_icon');
 
     const DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings();
@@ -213,6 +213,7 @@ class BackgroundUploadService {
       ongoing: !isError && uploaded < total,
       autoCancel: isError || uploaded >= total,
       color: isError ? const Color(0xFFE57373) : const Color(0xFFE91E63),
+      icon: '@mipmap/launcher_icon',
       // 确保文字可见
       styleInformation: const DefaultStyleInformation(true, true),
       // 添加更多可见性设置
@@ -250,6 +251,7 @@ class BackgroundUploadService {
       showProgress: false, // 不显示进度条
       autoCancel: true, // 自动消失
       color: Color(0xFF4CAF50), // 绿色表示成功
+      icon: '@mipmap/launcher_icon',
       timeoutAfter: 5000, // 5秒后自动消失
       visibility: NotificationVisibility.public,
       category: AndroidNotificationCategory.status,
@@ -479,6 +481,7 @@ class BackgroundUploadService {
       ongoing: true, // 持续通知
       autoCancel: false,
       color: Color(0xFFE91E63),
+      icon: '@mipmap/launcher_icon',
       visibility: NotificationVisibility.public,
       category: AndroidNotificationCategory.service,
     );

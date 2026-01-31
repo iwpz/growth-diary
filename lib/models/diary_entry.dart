@@ -96,6 +96,6 @@ class EntryDetailResult {
   }
 
   factory EntryDetailResult.deleted() {
-    return EntryDetailResult(isDeleted: true, updatedEntry: null);
+    return const EntryDetailResult(isDeleted: true, updatedEntry: null);
   }
 }

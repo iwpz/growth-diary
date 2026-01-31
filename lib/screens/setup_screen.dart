@@ -56,6 +56,8 @@ class _SetupScreenState extends State<SetupScreen> {
       ),
     );
 
+    if (!mounted) return;
+
     if (result != null && result is String) {
       // 尝试解码二维码数据
       final importedConfig = QRService.decodeEncryptedQRData(result);
@@ -92,8 +94,8 @@ class _SetupScreenState extends State<SetupScreen> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('导入'),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('导入'),
               ),
             ],
           ),
