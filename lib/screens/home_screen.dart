@@ -33,6 +33,7 @@ class HomeScreen extends StatefulWidget {
   final String currentConfigId;
   final CloudStorageService cloudService;
   final LocalStorageService localStorage;
+  final void Function(AppConfig) onConfigChanged;
 
   const HomeScreen({
     super.key,
@@ -40,6 +41,7 @@ class HomeScreen extends StatefulWidget {
     required this.currentConfigId,
     required this.cloudService,
     required this.localStorage,
+    required this.onConfigChanged,
   });
 
   @override
@@ -185,6 +187,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }
       });
     }
+  }
+
+  Future<void> _handleConfigChanged(AppConfig newConfig) async {
+    setState(() {
+      currentConfig = newConfig;
+    });
+    // 保存配置到本地存储
+    await widget.localStorage.saveConfig(newConfig);
+    // 保存到云端
+    await widget.cloudService.saveConfig(newConfig);
+    // 通知父组件配置已更改
+    widget.onConfigChanged(newConfig);
   }
 
   Future<void> _switchConfig() async {
@@ -621,14 +635,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   builder: (context) => SettingsScreen(
                     config: currentConfig,
                     cloudService: widget.cloudService,
-                    onConfigChanged: (newConfig) {
+                    onConfigChanged: (newConfig) async {
+                      // 重新加载所有配置，以确保删除的配置被正确移除
+                      final updatedConfigs =
+                          await widget.localStorage.loadAllConfigs();
+                      final currentId =
+                          await widget.localStorage.getCurrentConfigId();
                       setState(() {
-                        configs[newConfig.id] = newConfig;
-                        if (currentConfigId == newConfig.id) {
-                          currentConfig = newConfig;
-                        }
+                        configs = updatedConfigs;
+                        currentConfigId = currentId ?? '';
+                        currentConfig =
+                            configs[currentConfigId] ?? configs.values.first;
                       });
-                      widget.localStorage.saveAllConfigs(configs);
+                      // 切换到新配置，确保界面更新
+                      _switchConfig();
                     },
                   ),
                 ),
@@ -908,6 +928,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         config: currentConfig,
         webdavService: widget.cloudService,
         onEntryUpdated: _handleEntryUpdate,
+        onConfigChanged: _handleConfigChanged,
         thumbnailCache: _thumbnailCache,
         thumbnailFutures: _thumbnailFutures,
       ));
@@ -1177,12 +1198,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 OutlinedButton.icon(
                   onPressed: () async {
                     final importedConfig = await _scanQRCodeForBaby();
-                    if (importedConfig != null) {
+                    if (importedConfig != null && mounted) {
+                      // 直接创建新配置并跳转，不填充表单
+                      final newConfig = AppConfig(
+                        id: importedConfig.id,
+                        webdavUrl: importedConfig.webdavUrl,
+                        username: importedConfig.username,
+                        password: importedConfig.password,
+                        babyName: importedConfig.babyName,
+                        babyBirthDate: importedConfig.babyBirthDate,
+                        babyConceptionDate: importedConfig.babyConceptionDate,
+                      );
+
+                      // 添加到配置列表
                       setState(() {
-                        babyName = importedConfig.babyName;
-                        birthDate = importedConfig.babyBirthDate;
-                        conceptionDate = importedConfig.babyConceptionDate;
+                        configs[newConfig.id] = newConfig;
+                        currentConfigId = newConfig.id;
+                        currentConfig = newConfig;
                       });
+
+                      // 保存配置
+                      await widget.localStorage.saveAllConfigs(configs);
+                      await widget.localStorage
+                          .setCurrentConfigId(newConfig.id);
+
+                      // 关闭对话框并切换到新宝宝
+                      Navigator.of(context).pop();
+                      Future.delayed(Duration.zero, () => _switchConfig());
                     }
                   },
                   icon: const Icon(Icons.qr_code_scanner),
@@ -1304,30 +1346,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await widget.localStorage.saveAllConfigs(configs);
       await widget.localStorage.setCurrentConfigId(newConfig.id);
 
-      // 导航到设置页面进行云服务配置
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => SettingsScreen(
-              config: newConfig,
-              cloudService: widget.cloudService,
-              onConfigChanged: (updatedConfig) {
-                setState(() {
-                  configs[updatedConfig.id] = updatedConfig;
-                  if (currentConfigId == updatedConfig.id) {
-                    currentConfig = updatedConfig;
-                  }
-                });
-                widget.localStorage.saveAllConfigs(configs);
-              },
-            ),
-          ),
-        ).then((_) {
-          // 返回后重新加载数据
-          _switchConfig();
-        });
-      }
+      // 直接切换到新宝宝，不导航到设置页面
+      _switchConfig();
     }
   }
 

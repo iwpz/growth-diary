@@ -144,6 +144,10 @@ class _SetupScreenState extends State<SetupScreen> {
             currentConfigId: importedConfig.id,
             cloudService: webdavService,
             localStorage: localStorage,
+            onConfigChanged: (config) {
+              // SetupScreen创建的配置，不需要特殊处理
+              localStorage.saveConfig(config);
+            },
           ),
         ),
       );
@@ -255,6 +259,10 @@ class _SetupScreenState extends State<SetupScreen> {
             currentConfigId: config.id,
             cloudService: _webdavService,
             localStorage: localStorage,
+            onConfigChanged: (config) {
+              // SetupScreen创建的配置，不需要特殊处理
+              localStorage.saveConfig(config);
+            },
           ),
         ),
       );

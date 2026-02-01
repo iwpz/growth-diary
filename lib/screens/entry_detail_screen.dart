@@ -12,6 +12,7 @@ class EntryDetailScreen extends StatefulWidget {
   final AppConfig config;
   final CloudStorageService cloudService;
   final void Function(EntryDetailResult, DiaryEntry)? onEntryUpdated;
+  final void Function(AppConfig)? onConfigChanged;
 
   const EntryDetailScreen({
     super.key,
@@ -19,6 +20,7 @@ class EntryDetailScreen extends StatefulWidget {
     required this.config,
     required this.cloudService,
     this.onEntryUpdated,
+    this.onConfigChanged,
   });
 
   @override
@@ -99,9 +101,16 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
           imagePaths: widget.entry.imagePaths,
           webdavService: widget.cloudService,
           initialIndex: initialIndex,
+          onSetAsCoverImage:
+              widget.onConfigChanged != null ? _setAsCoverImage : null,
         ),
       ),
     );
+  }
+
+  void _setAsCoverImage(String imagePath) {
+    final updatedConfig = widget.config.copyWith(babyCoverImagePath: imagePath);
+    widget.onConfigChanged!(updatedConfig);
   }
 
   String _getAgeDisplayText() {

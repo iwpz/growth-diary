@@ -7,12 +7,14 @@ class FullScreenImageView extends StatefulWidget {
   final List<String> imagePaths;
   final CloudStorageService webdavService;
   final int initialIndex;
+  final Function(String)? onSetAsCoverImage;
 
   const FullScreenImageView({
     super.key,
     required this.imagePaths,
     required this.webdavService,
     this.initialIndex = 0,
+    this.onSetAsCoverImage,
   });
 
   @override
@@ -73,6 +75,18 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
     }
   }
 
+  void _setAsCoverImage() {
+    if (widget.onSetAsCoverImage != null) {
+      widget.onSetAsCoverImage!(widget.imagePaths[_currentIndex]);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已设为宝宝封面图')),
+        );
+        Navigator.of(context).pop();
+      }
+    }
+  }
+
   Future<void> _loadFullImage(int index) async {
     if (index < 0 || index >= widget.imagePaths.length) return;
 
@@ -109,6 +123,12 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
         foregroundColor: Colors.white,
         title: Text('${_currentIndex + 1} / ${widget.imagePaths.length}'),
         actions: [
+          if (widget.onSetAsCoverImage != null)
+            IconButton(
+              icon: const Icon(Icons.photo_album),
+              tooltip: '设为封面图',
+              onPressed: _setAsCoverImage,
+            ),
           IconButton(
             icon: const Icon(Icons.share),
             onPressed: _shareImage,

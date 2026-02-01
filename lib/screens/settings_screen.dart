@@ -1,16 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:screenshot/screenshot.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'dart:io';
 import '../models/app_config.dart';
 import '../services/cloud_storage_service.dart';
 import '../services/local_storage_service.dart';
-import '../services/qr_service.dart';
-import 'setup_screen.dart';
 import 'webdav_config_screen.dart';
+import 'app_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AppConfig config;
@@ -30,7 +23,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final LocalStorageService _localStorage = LocalStorageService();
-  final ScreenshotController _screenshotController = ScreenshotController();
   late AppConfig _config;
 
   @override
@@ -39,109 +31,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _config = widget.config;
   }
 
-  Future<void> _showQRCode() async {
-    // 使用QRService生成加密的二维码数据
-    final qrData = QRService.generateEncryptedQRData(_config);
-
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Screenshot(
-              controller: _screenshotController,
-              child: Container(
-                color: Colors.white, // 白色背景
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Logo
-                    SvgPicture.asset(
-                      'assets/images/logo.svg',
-                      height: 48,
-                      width: 48,
-                      colorFilter: const ColorFilter.mode(
-                        Color(0xFFE91E63), // 粉红色
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // 标题：宝宝名成长日记
-                    Text(
-                      '${_config.babyName}成长日记',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFE91E63), // 粉红色
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    // 二维码
-                    QrImageView(
-                      data: qrData,
-                      version: QrVersions.auto,
-                      size: 200.0,
-                      errorCorrectionLevel: QrErrorCorrectLevel.M,
-                    ),
-                    const SizedBox(height: 5),
-                    // 说明文字
-                    const Text(
-                      '扫描二维码导入配置',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFFAD1457), // 深粉色
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+  Widget _buildSection(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Colors.pink.shade700,
         ),
-        actions: [
-          TextButton.icon(
-            onPressed: () async {
-              try {
-                // 生成二维码图片
-                final image = await _screenshotController.capture();
-                if (image != null) {
-                  // 保存到临时文件
-                  final tempDir = await getTemporaryDirectory();
-                  final file = File('${tempDir.path}/baby_config_qr.png');
-                  await file.writeAsBytes(image);
-
-                  // 分享图片
-                  await SharePlus.instance.share(
-                    ShareParams(
-                      text: '${_config.babyName}成长日记 - 扫码导入配置',
-                      files: [XFile(file.path)],
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  // ignore: use_build_context_synchronously
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('分享失败，请重试')),
-                  );
-                }
-              }
-            },
-            icon: const Icon(Icons.share),
-            label: const Text('分享'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('关闭'),
-          ),
-        ],
       ),
     );
   }
@@ -231,99 +130,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _clearCache() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('清除缓存'),
-        content: const Text('这将删除所有已缓存的媒体文件。确定继续吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true && mounted) {
-      // 显示loading对话框
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('正在清除缓存...'),
-            ],
-          ),
-        ),
-      );
-
-      try {
-        await widget.cloudService.clearCache();
-
-        // 关闭loading对话框
-        if (mounted) {
-          Navigator.of(context).pop(); // 关闭loading对话框
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('缓存已清除')),
-          );
-        }
-      } catch (e) {
-        // 关闭loading对话框
-        if (mounted) {
-          Navigator.of(context).pop(); // 关闭loading对话框
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('清除缓存失败: $e')),
-          );
-        }
-      }
-    }
-  }
-
-  Future<void> _resetConfiguration() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('重新配置'),
-        content: const Text('这将清除当前配置并返回设置页面。确定继续吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await _localStorage.clearAllConfigs();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => SetupScreen(
-              localStorage: _localStorage,
-            ),
-          ),
-          (route) => false,
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -339,7 +145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.baby_changing_station),
             title: const Text('宝宝昵称'),
-            subtitle: Text(_config.childName),
+            subtitle: Text(_config.babyName),
             trailing: const Icon(Icons.chevron_right),
             onTap: _showEditChildNameDialog,
           ),
@@ -347,8 +153,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.cake),
             title: const Text('宝宝生日'),
             subtitle: Text(
-              _config.childBirthDate != null
-                  ? '${_config.childBirthDate!.year}-${_config.childBirthDate!.month.toString().padLeft(2, '0')}-${_config.childBirthDate!.day.toString().padLeft(2, '0')}'
+              _config.babyBirthDate != null
+                  ? '${_config.babyBirthDate!.year}-${_config.babyBirthDate!.month.toString().padLeft(2, '0')}-${_config.babyBirthDate!.day.toString().padLeft(2, '0')}'
                   : '未设置',
             ),
             trailing: const Icon(Icons.chevron_right),
@@ -358,8 +164,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.pregnant_woman),
             title: const Text('受孕日'),
             subtitle: Text(
-              _config.conceptionDate != null
-                  ? '${_config.conceptionDate!.year}-${_config.conceptionDate!.month.toString().padLeft(2, '0')}-${_config.conceptionDate!.day.toString().padLeft(2, '0')}'
+              _config.babyConceptionDate != null
+                  ? '${_config.babyConceptionDate!.year}-${_config.babyConceptionDate!.month.toString().padLeft(2, '0')}-${_config.babyConceptionDate!.day.toString().padLeft(2, '0')}'
                   : '未设置',
             ),
             trailing: const Icon(Icons.chevron_right),
@@ -392,21 +198,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
           _buildSection('应用'),
           ListTile(
-            leading: const Icon(Icons.qr_code, color: Colors.green),
-            title: const Text('导出配置二维码'),
-            subtitle: const Text('生成包含宝宝配置信息的二维码'),
-            onTap: _showQRCode,
-          ),
-          ListTile(
-            leading: const Icon(Icons.cleaning_services, color: Colors.orange),
-            title: const Text('清除缓存'),
-            subtitle: const Text('清除已下载的媒体文件缓存'),
-            onTap: _clearCache,
-          ),
-          ListTile(
-            leading: const Icon(Icons.edit, color: Colors.blue),
-            title: const Text('重新配置'),
-            onTap: _resetConfiguration,
+            leading:
+                const Icon(Icons.settings_applications, color: Colors.blue),
+            title: const Text('应用设置'),
+            subtitle: const Text('数据管理、缓存清理、账户设置'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AppSettingsScreen(
+                    config: _config,
+                    cloudService: widget.cloudService,
+                    onConfigChanged: widget.onConfigChanged,
+                  ),
+                ),
+              );
+            },
           ),
           const ListTile(
             leading: Icon(Icons.info),
@@ -414,20 +222,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text('成长日记 v1.0.0'),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSection(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: Colors.pink.shade700,
-        ),
       ),
     );
   }

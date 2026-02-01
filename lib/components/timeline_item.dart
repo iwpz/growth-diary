@@ -14,6 +14,7 @@ class TimelineItem extends StatefulWidget {
   final AppConfig config;
   final CloudStorageService webdavService;
   final void Function(EntryDetailResult, DiaryEntry) onEntryUpdated;
+  final void Function(AppConfig)? onConfigChanged;
   final Map<String, Uint8List?> thumbnailCache;
   final Map<String, Future<Uint8List?>> thumbnailFutures;
 
@@ -27,6 +28,7 @@ class TimelineItem extends StatefulWidget {
     required this.config,
     required this.webdavService,
     required this.onEntryUpdated,
+    this.onConfigChanged,
     required this.thumbnailCache,
     required this.thumbnailFutures,
   });
@@ -109,6 +111,7 @@ class _TimelineItemState extends State<TimelineItem> {
                         config: widget.config,
                         cloudService: widget.webdavService,
                         onEntryUpdated: widget.onEntryUpdated,
+                        onConfigChanged: widget.onConfigChanged,
                       ),
                     ),
                   ).then((result) => widget.onEntryUpdated(
@@ -124,17 +127,6 @@ class _TimelineItemState extends State<TimelineItem> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Title
-                        if (widget.entry.title.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            widget.entry.title,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
                         // Description
                         if (widget.entry.description.isNotEmpty) ...[
                           const SizedBox(height: 8),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/home_screen.dart';
 import 'screens/setup_screen.dart';
+import 'models/app_config.dart';
 import 'services/local_storage_service.dart';
 import 'services/webdav_service.dart';
 import 'services/cloud_storage_service.dart';
@@ -58,6 +59,11 @@ class _SplashScreenState extends State<SplashScreen> {
     _initializeApp();
   }
 
+  void _handleConfigChanged(AppConfig config) {
+    // 更新本地存储中的配置
+    _localStorage.saveConfig(config);
+  }
+
   Future<void> _initializeApp() async {
     try {
       // Initialize WorkManager first
@@ -103,6 +109,7 @@ class _SplashScreenState extends State<SplashScreen> {
               currentConfigId: configId,
               cloudService: _webdavService,
               localStorage: _localStorage,
+              onConfigChanged: _handleConfigChanged,
             ),
           ),
         );
@@ -116,6 +123,7 @@ class _SplashScreenState extends State<SplashScreen> {
               currentConfigId: configId,
               cloudService: _webdavService,
               localStorage: _localStorage,
+              onConfigChanged: _handleConfigChanged,
             ),
           ),
         );
