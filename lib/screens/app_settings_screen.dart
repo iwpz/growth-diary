@@ -46,69 +46,130 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        content: Column(
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Screenshot(
               controller: _screenshotController,
               child: Container(
-                color: Colors.white, // 白色背景
-                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Logo
-                    SvgPicture.asset(
-                      'assets/images/logo.svg',
-                      height: 48,
-                      width: 48,
-                      colorFilter: const ColorFilter.mode(
-                        Color(0xFFE91E63), // 粉红色
-                        BlendMode.srcIn,
+                    // Decorative element
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.pink.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: SvgPicture.asset(
+                        'assets/images/logo.svg',
+                        height: 48,
+                        width: 48,
+                        colorFilter: const ColorFilter.mode(
+                          Color(0xFFE91E63), // Pink
+                          BlendMode.srcIn,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // 标题：宝宝名成长日记
+                    const SizedBox(height: 16),
+                    // Title
                     Text(
-                      '${_config.babyName}成长日记',
+                      '${_config.babyName}的成长日记',
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFFE91E63), // 粉红色
+                        color: Color(0xFFE91E63),
+                        letterSpacing: 0.5,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 10),
-                    // 二维码
-                    QrImageView(
-                      data: qrData,
-                      version: QrVersions.auto,
-                      size: 200.0,
-                      errorCorrectionLevel: QrErrorCorrectLevel.M,
-                    ),
-                    const SizedBox(height: 5),
-                    // 说明文字
-                    const Text(
-                      '扫描二维码导入配置',
+                    const SizedBox(height: 8),
+                    Text(
+                      '扫一扫，同步这份美好',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Color(0xFFAD1457), // 深粉色
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
                       ),
                       textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    // QR Code with border
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.pink.shade100,
+                          width: 2,
+                        ),
+                      ),
+                      child: QrImageView(
+                        data: qrData,
+                        version: QrVersions.auto,
+                        size: 200.0,
+                        errorCorrectionLevel: QrErrorCorrectLevel.M,
+                        // Add some style to QR dots if possible or keep simple
+                        foregroundColor: const Color(0xFFE91E63),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Footer text
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.pink.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        '配置信息已加密处理',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFAD1457),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                TextButton.icon(
-                  onPressed: () async {
-                    // 截图并分享
+                _buildActionButton(
+                  icon: Icons.close_rounded,
+                  label: '关闭',
+                  onTap: () => Navigator.of(context).pop(),
+                  color: Colors.white,
+                  textColor: Colors.white,
+                  isOutlined: true,
+                ),
+                const SizedBox(width: 20),
+                _buildActionButton(
+                  icon: Icons.share_rounded,
+                  label: '分享',
+                  onTap: () async {
+                    // Capture and share
                     final image = await _screenshotController.capture();
                     if (image != null && mounted) {
                       final directory = await getTemporaryDirectory();
@@ -122,16 +183,55 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                       );
                     }
                   },
-                  icon: const Icon(Icons.share),
-                  label: const Text('分享'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('关闭'),
+                  color: Colors.white,
+                  textColor: Colors.pink,
+                  isOutlined: false,
                 ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required Color color,
+    required Color textColor,
+    required bool isOutlined,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(30),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          decoration: BoxDecoration(
+            color: isOutlined ? Colors.white.withOpacity(0.2) : color,
+            borderRadius: BorderRadius.circular(30),
+            border:
+                isOutlined ? Border.all(color: Colors.white, width: 1.5) : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  color: isOutlined ? Colors.white : textColor, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isOutlined ? Colors.white : textColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -259,13 +359,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         children: [
           _buildSection('数据管理'),
           ListTile(
-            leading: const Icon(Icons.qr_code, color: Colors.green),
+            leading: const Icon(Icons.qr_code),
             title: const Text('导出配置二维码'),
             subtitle: const Text('生成包含宝宝配置信息的二维码'),
             onTap: _showQRCode,
           ),
           ListTile(
-            leading: const Icon(Icons.cleaning_services, color: Colors.orange),
+            leading: const Icon(Icons.cleaning_services),
             title: const Text('清除缓存'),
             subtitle: const Text('清除已下载的媒体文件缓存'),
             onTap: _clearCache,
@@ -273,7 +373,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           const Divider(),
           _buildSection('账户管理'),
           ListTile(
-            leading: const Icon(Icons.waving_hand, color: Colors.red),
+            leading: const Icon(Icons.waving_hand),
             title: const Text('挥手告别'),
             subtitle: const Text('清除当前宝宝的本地配置'),
             onTap: _logout,

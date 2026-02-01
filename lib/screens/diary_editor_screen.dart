@@ -67,82 +67,145 @@ class _DiaryEditorScreenState extends State<DiaryEditorScreen> {
     }
   }
 
+  String _formatDate(DateTime date) {
+    return '${date.year}年${date.month}月${date.day}日';
+  }
+
+  String _getWeekday(DateTime date) {
+    const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    return weekdays[date.weekday - 1];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final displayDate = _selectedDate ?? DateTime.now();
+
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('添加日记'),
+        title: const Text(
+          '写日记',
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          color: Colors.black87,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         actions: [
-          TextButton(
-            onPressed: _saveDiary,
-            child: const Text(
-              '保存',
-              style: TextStyle(color: Colors.white),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: TextButton(
+              onPressed: _saveDiary,
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.pink.shade50,
+                foregroundColor: Colors.pink,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+              child: const Text('保存',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(
-                      labelText: '标题',
-                      hintText: '输入日记标题（可选）',
-                      border: OutlineInputBorder(),
+      body: Column(
+        children: [
+          // 日期选择条
+          InkWell(
+            onTap: _selectDate,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade100),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.pink.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.calendar_today_rounded,
+                        size: 18, color: Colors.pink),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    _formatDate(displayDate),
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade800,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.calendar_today),
-                  onPressed: _selectDate,
-                  tooltip: '设置日期',
-                ),
-              ],
-            ),
-            if (_selectedDate != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  '日期: ${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}',
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-              ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: TextField(
-                controller: _contentController,
-                decoration: const InputDecoration(
-                  labelText: '内容',
-                  hintText: '写下你的日记内容...',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                ),
-                maxLines: null,
-                expands: true,
-                textAlignVertical: TextAlignVertical.top,
+                  const SizedBox(width: 8),
+                  Text(
+                    _getWeekday(displayDate),
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.arrow_forward_ios_rounded,
+                      size: 14, color: Colors.grey.shade400),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _saveDiary,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.pink,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('就这样吧'),
+          ),
+
+          // 内容编辑区域
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 标题输入
+                  TextField(
+                    controller: _titleController,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: '输入标题...',
+                      hintStyle: TextStyle(
+                          color: Colors.grey, fontWeight: FontWeight.bold),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // 内容输入
+                  TextField(
+                    controller: _contentController,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      height: 1.6,
+                      color: Colors.black87,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: '记录今天发生的趣事...',
+                      hintStyle: TextStyle(color: Colors.grey),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    maxLines: null, // 自适应高度
+                  ),
+                  const SizedBox(height: 100), // 底部留白，防止被键盘遮挡
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

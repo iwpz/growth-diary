@@ -198,8 +198,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(),
           _buildSection('应用'),
           ListTile(
-            leading:
-                const Icon(Icons.settings_applications, color: Colors.blue),
+            leading: const Icon(Icons.settings_applications),
             title: const Text('应用设置'),
             subtitle: const Text('数据管理、缓存清理、账户设置'),
             trailing: const Icon(Icons.chevron_right),

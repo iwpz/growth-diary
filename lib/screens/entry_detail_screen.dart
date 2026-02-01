@@ -43,7 +43,11 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
   }
 
   Future<void> _loadImages() async {
+    bool mediumLoaded = widget.entry.imageThumbnails.length == 1 ||
+        widget.entry.imageThumbnails.length == 2 ||
+        widget.entry.imageThumbnails.length == 4;
     for (var path in widget.entry.imageThumbnails) {
+      if (mediumLoaded) path = path.replaceAll('small', 'medium');
       if (!_imageCache.containsKey(path)) {
         setState(() {
           _loadingImages[path] = true;
@@ -228,22 +232,48 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
     final String? newDescription = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('编辑描述'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          '编辑描述',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         content: TextField(
           controller: controller,
-          maxLines: 5,
-          decoration: const InputDecoration(
-            hintText: '输入描述...',
-            border: OutlineInputBorder(),
+          maxLines: 8,
+          minLines: 3,
+          style: const TextStyle(fontSize: 16, height: 1.5),
+          decoration: InputDecoration(
+            hintText: '记录下这一刻的想法...',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            filled: true,
+            fillColor: Colors.grey.shade50,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.all(16),
           ),
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.grey.shade600,
+            ),
             child: const Text('取消'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(context, controller.text),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.pink,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            ),
             child: const Text('保存'),
           ),
         ],
@@ -292,25 +322,37 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
     }
   }
 
+  String _getWeekday(DateTime date) {
+    const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    return weekdays[date.weekday - 1];
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(widget.entry.title),
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
-        foregroundColor: Colors.black,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          color: Colors.black87,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_today),
+            icon: const Icon(Icons.calendar_today, color: Colors.black87),
             onPressed: _editDate,
+            tooltip: '修改日期',
           ),
           IconButton(
-            icon: const Icon(Icons.edit),
+            icon: const Icon(Icons.edit, color: Colors.black87),
             onPressed: _editDescription,
+            tooltip: '编辑内容',
           ),
           IconButton(
-            icon: const Icon(Icons.delete),
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
@@ -324,8 +366,8 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child:
-                          const Text('删除', style: TextStyle(color: Colors.red)),
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      child: const Text('删除'),
                     ),
                   ],
                 ),
@@ -347,140 +389,137 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
               }
             },
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.pink.shade50,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
+            // 顶部日期和年龄卡片区域
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // 大号日期
+                Text(
+                  '${_currentEntry.date.day}',
+                  style: const TextStyle(
+                    fontSize: 56,
+                    fontWeight: FontWeight.w300,
+                    color: Colors.black87,
+                    height: 1.0,
+                    letterSpacing: -2,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // 年月和星期
+                Container(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _getAgeDisplayText(),
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.pink.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_currentEntry.date.year}-${_currentEntry.date.month.toString().padLeft(2, '0')}-${_currentEntry.date.day.toString().padLeft(2, '0')}',
+                        '${_currentEntry.date.year}年${_currentEntry.date.month}月',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey.shade700,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        _getWeekday(_currentEntry.date),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade400,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
-                  Icon(
-                    Icons.child_care,
-                    size: 60,
-                    color: Colors.pink.shade200,
+                ),
+                const Spacer(),
+                // 年龄胶囊
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.pink.shade50,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                ],
-              ),
+                  child: Text(
+                    _getAgeDisplayText(),
+                    style: TextStyle(
+                      color: Colors.pink.shade400,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
             ),
+
+            const SizedBox(height: 32),
+
+            // 标题（如果有）
             if (_currentEntry.title.isNotEmpty) ...[
-              const SizedBox(height: 20),
               Text(
                 _currentEntry.title,
                 style: const TextStyle(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                  height: 1.3,
+                  letterSpacing: 0.5,
                 ),
-              )
+              ),
+              const SizedBox(height: 16),
             ],
+
+            // 描述内容
             if (_currentEntry.description.isNotEmpty) ...[
-              const SizedBox(height: 20),
               Text(
                 _currentEntry.description,
-                style: const TextStyle(fontSize: 16, height: 1.5),
+                style: const TextStyle(
+                  fontSize: 16,
+                  height: 1.8, // 增加行高，提升阅读体验
+                  color: Colors.black87,
+                ),
               ),
-            ],
-            if (_currentEntry.imagePaths.isNotEmpty) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: 32),
+            ] else if (_currentEntry.title.isEmpty) ...[
+              // 如果既没标题也没描述，显示占位符（虽然正常逻辑不会出现空记录）
               Text(
-                '${_currentEntry.imagePaths.length} 张照片',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
+                '没有文字记录',
+                style: TextStyle(color: Colors.grey.shade400),
               ),
-              const SizedBox(height: 8),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                ),
-                itemCount: widget.entry.imagePaths.length,
-                itemBuilder: (context, index) {
-                  final thumbnailPath = widget.entry.imageThumbnails[index];
-                  final imageData = _imageCache[thumbnailPath];
-                  final isLoading = _loadingImages[thumbnailPath] ?? false;
+              const SizedBox(height: 32),
+            ],
 
-                  return GestureDetector(
-                    onTap: () => _showFullScreenImage(index),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : imageData != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.memory(
-                                    imageData,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                  ),
-                                )
-                              : const Center(
-                                  child: Icon(
-                                    Icons.image,
-                                    size: 40,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                    ),
-                  );
-                },
-              ),
+            // 照片部分
+            if (_currentEntry.imagePaths.isNotEmpty) ...[
+              _buildSectionHeader(Icons.photo_library_outlined, '照片',
+                  _currentEntry.imagePaths.length),
+              const SizedBox(height: 16),
+              _buildImageGrid(),
+              const SizedBox(height: 32),
             ],
+
+            // 视频部分
             if (_currentEntry.videoPaths.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              Text(
-                '${_currentEntry.videoPaths.length} 个视频',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 8),
+              _buildSectionHeader(Icons.videocam_outlined, '视频',
+                  _currentEntry.videoPaths.length),
+              const SizedBox(height: 16),
               GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
+                  crossAxisCount: 2, // 视频使用 2 列显示，更大一些
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.6, // 16:10 比例
                 ),
                 itemCount: _currentEntry.videoPaths.length,
                 itemBuilder: (context, index) {
@@ -493,61 +532,210 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                     onTap: () => _showFullScreenVideo(index),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      child: Stack(
-                        children: [
-                          // 缩略图
-                          Positioned.fill(
-                            child: isLoading
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // 缩略图
+                            isLoading
                                 ? const Center(
                                     child: CircularProgressIndicator())
                                 : thumbnail != null
-                                    ? ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.memory(
-                                          thumbnail,
-                                          fit: BoxFit.cover,
-                                          width: double.infinity,
-                                          height: double.infinity,
-                                        ),
+                                    ? Image.memory(
+                                        thumbnail,
+                                        fit: BoxFit.cover,
                                       )
-                                    : const Center(
+                                    : Center(
                                         child: Icon(
                                           Icons.videocam,
                                           size: 40,
-                                          color: Colors.purple,
+                                          color: Colors.pink.shade200,
                                         ),
                                       ),
-                          ),
-                          // 视频播放图标覆盖层
-                          Positioned(
-                            bottom: 4,
-                            right: 4,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.play_arrow,
-                                color: Colors.white,
-                                size: 16,
+                            // 播放按钮覆盖层
+                            Container(
+                              color: Colors.black.withOpacity(0.1),
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.8),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: Colors.pink,
+                                    size: 24,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   );
                 },
               ),
+              const SizedBox(height: 32),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildImageGrid() {
+    final images = _currentEntry.imagePaths;
+    final thumbnails = _currentEntry.imageThumbnails;
+
+    if (images.isEmpty) return const SizedBox.shrink();
+
+    // 只有1张图：大卡片展示
+    if (images.length == 1) {
+      return GestureDetector(
+        onTap: () => _showFullScreenImage(0),
+        child: Hero(
+          tag: 'image_${_currentEntry.id}_0',
+          child: Container(
+            height: 240,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: _buildImageItem(
+                  0, thumbnails[0].replaceAll('small', 'medium'), BoxFit.cover),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 2张或4张图：2列布局，其他情况3列布局
+    int crossAxisCount = 3;
+    if (images.length == 2 || images.length == 4) {
+      crossAxisCount = 2;
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.0,
+      ),
+      itemCount: images.length,
+      itemBuilder: (context, index) {
+        return GestureDetector(
+          onTap: () => _showFullScreenImage(index),
+          child: Hero(
+            tag: 'image_${_currentEntry.id}_$index',
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _buildImageItem(index, thumbnails[index], BoxFit.cover),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildImageItem(int index, String thumbnailPath, BoxFit fit) {
+    final imageData = _imageCache[thumbnailPath];
+    final isLoading = _loadingImages[thumbnailPath] ?? false;
+
+    if (isLoading) {
+      return Container(
+        color: Colors.grey.shade100,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (imageData != null) {
+      return Image.memory(
+        imageData,
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+      );
+    }
+
+    return Container(
+      color: Colors.grey.shade100,
+      child: const Center(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          size: 30,
+          color: Colors.grey,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(IconData icon, String title, int count) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.pink.shade300),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
