@@ -9,66 +9,40 @@ class PregnancyLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Timeline indicator for pregnancy
-        SizedBox(
-          width: 60,
-          child: Column(
-            children: [
-              // Pregnancy icon
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.pink.shade300, Colors.pink.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.pink.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.pregnant_woman,
-                  color: Colors.white,
-                  size: 30,
-                ),
-              ),
-            ],
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.pink.shade200,
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        // Pregnancy label
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            margin: const EdgeInsets.only(bottom: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.pink.shade50,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.pink.shade200,
-                width: 1,
-              ),
             ),
             child: Text(
               '怀孕啦！${DateFormat('yyyy年M月d日').format(config.conceptionDate!)}',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: Colors.pink.shade700,
               ),
             ),
           ),
-        ),
-      ],
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.pink.shade200,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

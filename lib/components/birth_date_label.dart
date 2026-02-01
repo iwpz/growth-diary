@@ -14,74 +14,40 @@ class BirthDateLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Timeline indicator for birth date
-        SizedBox(
-          width: 60,
-          child: Column(
-            children: [
-              // Birth icon
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [Colors.blue.shade300, Colors.blue.shade600],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blue.withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.child_care,
-                  color: Colors.white,
-                  size: 30,
-                ),
-              ),
-
-              // Bottom line
-              if (showBottomLine)
-                Container(
-                  width: 2,
-                  height: 24,
-                  color: Colors.pink.shade200,
-                ),
-            ],
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.blue.shade200,
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        // Birth date label
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            margin: const EdgeInsets.only(bottom: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.blue.shade50,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.blue.shade200,
-                width: 1,
-              ),
             ),
             child: Text(
               '出生啦！${DateFormat('yyyy年M月d日').format(config.childBirthDate ?? DateTime.now())}',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: Colors.blue.shade700,
               ),
             ),
           ),
-        ),
-      ],
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.blue.shade200,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

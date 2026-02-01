@@ -308,13 +308,12 @@ class EntryCreationService {
             await webdavService.uploadVideoWithThumbnails(file, fileName);
         final pathList = paths.split('|');
         final uploadedPath = pathList[0];
-        final thumbnailPath =
-            pathList.length >= 3 && pathList[2].isNotEmpty ? pathList[2] : null;
+        final thumbnailPath = pathList.length >= 3 && pathList[2].isNotEmpty
+            ? pathList[2]
+            : pathList[0];
 
         videoPaths.add(uploadedPath);
-        if (thumbnailPath != null) {
-          videoThumbnails.add(thumbnailPath);
-        }
+        videoThumbnails.add(thumbnailPath);
         onProgress?.call(i + 1, videos.length);
       }
 

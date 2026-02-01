@@ -136,7 +136,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       return '出生前 $months 月 $days 天';
     } else {
       // 出生后记录：显示年龄
-      return _currentEntry.getAgeLabel(widget.config.childBirthDate);
+      return _currentEntry.getAgeLabel(widget.config);
     }
   }
 

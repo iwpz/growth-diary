@@ -14,60 +14,56 @@ class CurrentMonthSeparator extends StatelessWidget {
     if (birthDate == null) {
       return const SizedBox.shrink(); // Or some default
     }
-    final ageLabel =
-        AgeCalculator.formatSimplifiedAgeLabel(birthDate, currentDate);
+    final ageLabel = AgeCalculator.formatDetailedAgeLabel(currentDate, config);
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Stack(
-        alignment: Alignment.center,
+      margin: const EdgeInsets.symmetric(vertical: 16),
+      child: Row(
         children: [
-          // 气泡背景
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.pink.shade200,
+            ),
+          ),
           Container(
-            width: double.infinity,
-            height: 60,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.pink.shade50,
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(
-                color: Colors.pink.shade200,
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.pink.withValues(alpha: 0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.cake,
+                  color: Colors.pink.shade600,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '宝宝$ageLabel啦',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.pink.shade800,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.celebration,
+                  color: Colors.pink.shade600,
+                  size: 20,
                 ),
               ],
             ),
           ),
-          // 内容
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.cake,
-                color: Colors.pink.shade600,
-                size: 28,
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '宝宝现在$ageLabel啦',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.pink.shade800,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Icon(
-                Icons.celebration,
-                color: Colors.pink.shade600,
-                size: 28,
-              ),
-            ],
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.pink.shade200,
+            ),
           ),
         ],
       ),

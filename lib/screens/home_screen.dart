@@ -1006,7 +1006,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       onRefresh: _loadEntries,
       child: ListView.builder(
         controller: _scrollController,
-        padding: const EdgeInsets.all(16),
         itemCount: items.length,
         itemBuilder: (context, index) => items[index],
       ),

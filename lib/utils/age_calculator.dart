@@ -1,3 +1,5 @@
+import 'package:growth_diary/models/app_config.dart';
+
 class AgeCalculator {
   /// Average days per month used for age calculation
   /// 365.25 days/year ÷ 12 months ≈ 30.44 days/month
@@ -122,9 +124,15 @@ class AgeCalculator {
   }
 
   /// Formats detailed age (years, months, days) to a human-readable Chinese label
-  static String formatDetailedAgeLabel(
-      DateTime birthDate, DateTime currentDate) {
-    final age = calculateDateDifference(birthDate, currentDate);
+  static String formatDetailedAgeLabel(DateTime currentDate, AppConfig config) {
+    int ageInMonths = calculateAgeInMonths(config.childBirthDate!, currentDate);
+    if (ageInMonths < 0 && config.conceptionDate == null) {
+      return '出生前 ${-ageInMonths} 月';
+    } else if (ageInMonths < 0 && config.conceptionDate != null) {
+      return '孕${calculateWeeksSinceConception(config.conceptionDate!, currentDate)}周';
+    }
+
+    final age = calculateDateDifference(config.childBirthDate!, currentDate);
     final years = age['years']!;
     final months = age['months']!;
     final days = age['days']!;
@@ -142,12 +150,16 @@ class AgeCalculator {
 
   /// Formats age to a simplified Chinese label (years, months and days)
   static String formatSimplifiedAgeLabel(
-      DateTime birthDate, DateTime currentDate) {
-    int ageInMonths = calculateAgeInMonths(birthDate, currentDate);
-    if (ageInMonths < 0) {
+      DateTime currentDate, AppConfig config) {
+    bool isBeforeBirth = currentDate.isBefore(config.childBirthDate!);
+    if (isBeforeBirth && config.conceptionDate == null) {
+      int ageInMonths =
+          calculateAgeInMonths(config.childBirthDate!, currentDate);
       return '出生前 ${-ageInMonths} 月';
+    } else if (isBeforeBirth && config.conceptionDate != null) {
+      return '孕${calculateWeeksSinceConception(config.conceptionDate!, currentDate)}周';
     }
-    final age = calculateDateDifference(birthDate, currentDate);
+    final age = calculateDateDifference(config.childBirthDate!, currentDate);
     final years = age['years']!;
     final months = age['months']!;
     final days = age['days']!;
@@ -157,9 +169,9 @@ class AgeCalculator {
     } else if (years == 0 && months == 0) {
       return '$days天';
     } else if (years == 0) {
-      return '$months个月$days天';
+      return '$months月龄';
     } else {
-      return '$years岁$months个月$days天';
+      return '$years岁$months个月';
     }
   }
 

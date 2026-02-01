@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:growth_diary/utils/age_calculator.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 
@@ -20,23 +21,42 @@ class GroupSeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final groupValue = representativeEntry.getGroupKey(config);
-    final displayValue = isPregnancyPeriod
-        ? groupValue
-        : (groupValue < 0 ? -groupValue + 1 : groupValue);
-    final displayText = isPregnancyPeriod
-        ? '孕$displayValue周'
-        : (groupValue < 0 ? '前$displayValue月' : '$displayValue月');
+    final displayText = AgeCalculator.formatSimplifiedAgeLabel(
+        representativeEntry.date, config);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Text(
-        displayText,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Colors.pink.shade700,
-        ),
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.pink.shade200,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.pink.shade50,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              displayText,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.pink.shade700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Container(
+              height: 1,
+              color: Colors.pink.shade200,
+            ),
+          ),
+        ],
       ),
     );
   }

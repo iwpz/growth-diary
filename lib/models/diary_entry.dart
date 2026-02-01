@@ -53,17 +53,17 @@ class DiaryEntry {
     );
   }
 
-  String getAgeLabel(DateTime? birthDate) {
-    if (birthDate != null) {
-      return AgeCalculator.formatDetailedAgeLabel(birthDate, date);
+  String getAgeLabel(AppConfig? config) {
+    if (config != null) {
+      return AgeCalculator.formatDetailedAgeLabel(date, config);
     } else {
       return AgeCalculator.formatAgeLabel(ageInMonths);
     }
   }
 
-  String getSimplifiedAgeLabel(DateTime? birthDate) {
-    if (birthDate != null) {
-      return AgeCalculator.formatSimplifiedAgeLabel(birthDate, date);
+  String getSimplifiedAgeLabel(AppConfig config) {
+    if (config.childBirthDate != null) {
+      return AgeCalculator.formatSimplifiedAgeLabel(date, config);
     } else {
       return AgeCalculator.formatAgeLabel(ageInMonths);
     }

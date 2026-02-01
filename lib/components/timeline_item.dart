@@ -40,191 +40,207 @@ class TimelineItem extends StatefulWidget {
 class _TimelineItemState extends State<TimelineItem> {
   @override
   Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Timeline indicator
-          SizedBox(
-            width: 60,
-            child: Column(
-              children: [
-                // Top line (only if not first in month)
-                Container(
-                  width: 2,
-                  height: 24,
-                  color: Colors.pink.shade200,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Content
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EntryDetailScreen(
+                    entry: widget.entry,
+                    config: widget.config,
+                    cloudService: widget.webdavService,
+                    onEntryUpdated: widget.onEntryUpdated,
+                    onConfigChanged: widget.onConfigChanged,
+                  ),
                 ),
-
-                // Circle indicator
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    border: Border.all(
-                      color: Colors.pink.shade300,
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.pink.withValues(alpha: 0.2),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+              ).then((result) => widget.onEntryUpdated(
+                  result ?? const EntryDetailResult(), widget.entry));
+            },
+            child: Card(
+              elevation: 0,
+              color: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(0),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  top: 12,
+                  bottom: 12,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Description
+                    if (widget.entry.description.isNotEmpty) ...[
+                      Text(
+                        widget.entry.description,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          height: 1.4,
+                          color: Colors.black87,
+                        ),
                       ),
+                      const SizedBox(height: 12),
                     ],
-                  ),
-                ),
 
-                // Bottom line
-                if (!widget.isLastInGroup)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      color: Colors.pink.shade200,
-                    ),
-                  )
-                else if (!widget.isLast)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      height: 48, // Connect to next month separator
-                      color: Colors.pink.shade200,
-                    ),
-                  )
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Content
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EntryDetailScreen(
-                        entry: widget.entry,
-                        config: widget.config,
-                        cloudService: widget.webdavService,
-                        onEntryUpdated: widget.onEntryUpdated,
-                        onConfigChanged: widget.onConfigChanged,
-                      ),
-                    ),
-                  ).then((result) => widget.onEntryUpdated(
-                      result ?? const EntryDetailResult(), widget.entry));
-                },
-                child: Card(
-                  elevation: 1,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // Media Grid
+                    if (widget.entry.imagePaths.isNotEmpty ||
+                        widget.entry.videoPaths.isNotEmpty) ...[
+                      _buildMediaGrid(),
+                      const SizedBox(height: 6),
+                    ],
+
+                    // Footer info
+                    Row(
                       children: [
-                        // Description
-                        if (widget.entry.description.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            widget.entry.description,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                        ],
-                        // Media info
-                        if (widget.entry.imagePaths.isNotEmpty ||
-                            widget.entry.videoPaths.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              if (widget.entry.imagePaths.isNotEmpty) ...[
-                                Icon(
-                                  Icons.photo,
-                                  size: 16,
-                                  color: Colors.grey.shade600,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${widget.entry.imagePaths.length} 张照片',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                              if (widget.entry.videoPaths.isNotEmpty) ...[
-                                if (widget.entry.imagePaths.isNotEmpty)
-                                  const SizedBox(width: 12),
-                                Icon(
-                                  Icons.videocam,
-                                  size: 16,
-                                  color: Colors.grey.shade600,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${widget.entry.videoPaths.length} 个视频',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          _buildThumbnailGrid(),
-                        ],
                         Text(
                           '${widget.entry.date.year}-${widget.entry.date.month.toString().padLeft(2, '0')}-${widget.entry.date.day.toString().padLeft(2, '0')}',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade600,
+                            color: Colors.grey.shade500,
                           ),
                         ),
+                        const Spacer(),
+                        if (widget.entry.imagePaths.isNotEmpty ||
+                            widget.entry.videoPaths.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (widget.entry.imagePaths.isNotEmpty) ...[
+                                  Icon(
+                                    Icons.photo,
+                                    size: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${widget.entry.imagePaths.length}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                                if (widget.entry.videoPaths.isNotEmpty) ...[
+                                  if (widget.entry.imagePaths.isNotEmpty)
+                                    const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.videocam,
+                                    size: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${widget.entry.videoPaths.length}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildThumbnailGrid() {
-    // 合并图片和视频缩略图，最多显示6个
+  Widget _buildMediaGrid() {
     final allThumbnails = [
       ...widget.entry.imageThumbnails
           .map((path) => {'path': path, 'isVideo': false}),
       ...widget.entry.videoThumbnails
           .map((path) => {'path': path, 'isVideo': true}),
-    ].take(6).toList();
+    ];
 
     if (allThumbnails.isEmpty) return const SizedBox.shrink();
 
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      children: allThumbnails.map((thumbnail) {
-        final path = thumbnail['path'] as String;
-        final isVideo = thumbnail['isVideo'] as bool;
-        return SizedBox(
-          width: 60,
-          height: 60,
-          child: _buildThumbnailItem(path, isVideo),
-        );
-      }).toList(),
+    // Determine layout based on count
+    final count = allThumbnails.length;
+    final displayCount = count > 9 ? 9 : count;
+    final displayList = allThumbnails.take(displayCount).toList();
+
+    // Single item - large view
+    if (count == 1) {
+      return AspectRatio(
+        aspectRatio: 16 / 9,
+        child: _buildThumbnailItem(
+          (displayList[0]['path'] as String).replaceAll('small', 'medium'),
+          displayList[0]['isVideo'] as bool,
+        ),
+      );
+    }
+
+    // Grid view
+    int crossAxisCount = 3;
+    if (count == 2 || count == 4) {
+      crossAxisCount = 2;
+    }
+
+    return GridView.builder(
+      padding: EdgeInsets.zero,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 4,
+        mainAxisSpacing: 4,
+        childAspectRatio: 1.0,
+      ),
+      itemCount: displayList.length,
+      itemBuilder: (context, index) {
+        final item = displayList[index];
+        final remaining = count - displayCount;
+
+        // Show +N on the last item if there are more
+        if (index == displayCount - 1 && remaining > 0) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildThumbnailItem(
+                  item['path'] as String, item['isVideo'] as bool),
+              Container(
+                color: Colors.black.withValues(alpha: 0.5),
+                alignment: Alignment.center,
+                child: Text(
+                  '+$remaining',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        return _buildThumbnailItem(
+            item['path'] as String, item['isVideo'] as bool);
+      },
     );
   }
 
