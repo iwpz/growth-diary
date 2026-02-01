@@ -66,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late AppConfig currentConfig;
   final ScrollController _scrollController = ScrollController();
   static const int _pageSize = 10;
+  DateTime? _targetMonth;
 
   // 上传进度相关状态
 
@@ -250,6 +251,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _scrollController.position.maxScrollExtent - 200) {
       _loadMoreEntries();
     }
+  }
+
+  void _scrollToMonth(DateTime date) {
+    final targetMonth = date.day == 1 ? date : DateTime(date.year, date.month);
+    setState(() => _targetMonth = targetMonth);
+    // 滚动将在 build 后执行
   }
 
   void _toggleExpanded() {
@@ -832,6 +839,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // Build items list with special labels inserted dynamically
     final items = <Widget>[];
+    final Map<DateTime, int> itemIndexMap = {};
 
     // Always add current month separator at the top
     items.add(CurrentMonthSeparator(config: currentConfig));
@@ -945,6 +953,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         thumbnailCache: _thumbnailCache,
         thumbnailFutures: _thumbnailFutures,
       ));
+      itemIndexMap[DateTime(entry.date.year, entry.date.month)] =
+          items.length - 1;
 
       // Add group separator after the entry if it's the last in the group
       if (isLastInGroup) {
@@ -1013,6 +1023,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         padding: EdgeInsets.symmetric(vertical: 16),
         child: Center(child: CircularProgressIndicator()),
       ));
+    }
+
+    // 如果有目标月份，滚动到对应位置
+    if (_targetMonth != null) {
+      final index = itemIndexMap[_targetMonth];
+      if (index != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollController.animateTo(
+            index * 250.0, // 假设平均高度 250
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        });
+      }
+      _targetMonth = null; // 重置
     }
 
     return RefreshIndicator(
@@ -1153,8 +1178,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return InkWell(
       onTap: () {
+        _scrollToMonth(date);
         Navigator.pop(context); // Close drawer
-        // TODO: Scroll to date
       },
       child: SizedBox(
         height: 50,
