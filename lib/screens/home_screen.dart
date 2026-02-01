@@ -56,6 +56,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? _errorMessage;
   final Map<String, Uint8List?> _thumbnailCache = {};
   final Map<String, Future<Uint8List?>> _thumbnailFutures = {};
+  Uint8List? _coverImageData;
+  bool _isLoadingCoverImage = false;
   bool _isExpanded = false;
   final ImagePicker _picker = ImagePicker();
   final ValueNotifier<UploadProgressData> _uploadProgressNotifier =
@@ -162,6 +164,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _isLoading = false;
         _hasMoreData = entries.length == _pageSize;
       });
+
+      // 加载封面图像
+      _loadCoverImage();
     } catch (e) {
       debugPrint('Error loading entries: $e');
       setState(() {
@@ -193,11 +198,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _handleConfigChanged(AppConfig newConfig) async {
     setState(() {
       currentConfig = newConfig;
+      // 清除封面图像缓存
+      _coverImageData = null;
+      _isLoadingCoverImage = false;
     });
     // 保存配置到本地存储
     await widget.localStorage.saveConfig(newConfig);
     // 保存到云端
     await widget.cloudService.saveConfig(newConfig);
+    // 重新加载封面图像
+    _loadCoverImage();
     // 通知父组件配置已更改
     widget.onConfigChanged(newConfig);
   }
@@ -576,118 +586,166 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         UploadProgressData(hasActiveTasks, progressText);
   }
 
+  Widget _buildSliverAppBar() {
+    final bool showExpanded = _coverImageData != null || _isLoadingCoverImage;
+
+    return SliverAppBar(
+      expandedHeight: showExpanded ? 200.0 : null,
+      pinned: true,
+      stretch: showExpanded,
+      backgroundColor: Colors.pink,
+      foregroundColor: Colors.white,
+      leading: Builder(
+        builder: (context) => IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () {
+            Scaffold.of(context).openDrawer();
+          },
+        ),
+      ),
+      title: GestureDetector(
+        onDoubleTap: () {
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        },
+        child: ValueListenableBuilder<UploadProgressData>(
+          valueListenable: _uploadProgressNotifier,
+          builder: (context, progressData, child) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  currentConfig.babyName,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (progressData.hasActiveTasks) ...[
+                const SizedBox(width: 12),
+                Text(
+                  progressData.progressText,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.access_time),
+            onPressed: () {
+              Scaffold.of(context).openEndDrawer();
+            },
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.settings),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => SettingsScreen(
+                  config: currentConfig,
+                  cloudService: widget.cloudService,
+                  onConfigChanged: (newConfig) async {
+                    // 重新加载所有配置，以确保删除的配置被正确移除
+                    final updatedConfigs =
+                        await widget.localStorage.loadAllConfigs();
+                    final currentId =
+                        await widget.localStorage.getCurrentConfigId();
+                    setState(() {
+                      configs = updatedConfigs;
+                      currentConfigId = currentId ?? '';
+                      currentConfig =
+                          configs[currentConfigId] ?? configs.values.first;
+                    });
+                    // 切换到新配置，确保界面更新
+                    _switchConfig();
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+      flexibleSpace: showExpanded
+          ? FlexibleSpaceBar(
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.pink.shade200, Colors.pink.shade400],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                  ),
+                  if (_coverImageData != null) ...[
+                    Image.memory(
+                      _coverImageData!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
+                    // 蒙版
+                    Container(
+                      color: Colors.black.withOpacity(0.3),
+                    ),
+                  ] else if (_isLoadingCoverImage)
+                    const Center(
+                        child: CircularProgressIndicator(color: Colors.white)),
+                ],
+              ),
+            )
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () {
-              // 打开左侧配置抽屉
-              Scaffold.of(context).openDrawer();
-            },
-          ),
-        ),
-        title: GestureDetector(
-          onDoubleTap: () {
-            _scrollController.animateTo(
-              0,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
-          },
-          child: ValueListenableBuilder<UploadProgressData>(
-            valueListenable: _uploadProgressNotifier,
-            builder: (context, progressData, child) => Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    currentConfig.babyName,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (progressData.hasActiveTasks) ...[
-                  const SizedBox(width: 12),
-                  Text(
-                    progressData.progressText,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.pink,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.pink),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.black,
-        actions: [
-          Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.access_time),
-              onPressed: () {
-                // 打开右侧时间轴抽屉
-                Scaffold.of(context).openEndDrawer();
-              },
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => SettingsScreen(
-                    config: currentConfig,
-                    cloudService: widget.cloudService,
-                    onConfigChanged: (newConfig) async {
-                      // 重新加载所有配置，以确保删除的配置被正确移除
-                      final updatedConfigs =
-                          await widget.localStorage.loadAllConfigs();
-                      final currentId =
-                          await widget.localStorage.getCurrentConfigId();
-                      setState(() {
-                        configs = updatedConfigs;
-                        currentConfigId = currentId ?? '';
-                        currentConfig =
-                            configs[currentConfigId] ?? configs.values.first;
-                      });
-                      // 切换到新配置，确保界面更新
-                      _switchConfig();
-                    },
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
       drawer: _buildConfigDrawer(),
       endDrawer: _buildTimelineDrawer(),
       body: Stack(
         children: [
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator())
-          else if (_errorMessage != null)
-            _buildErrorState()
-          else if (_entries.isEmpty)
-            _buildEmptyState()
-          else
-            _buildTimeline(),
+          RefreshIndicator(
+            onRefresh: _loadEntries,
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                _buildSliverAppBar(),
+                if (_isLoading)
+                  const SliverFillRemaining(
+                      child: Center(child: CircularProgressIndicator()))
+                else if (_errorMessage != null)
+                  SliverFillRemaining(child: _buildErrorState())
+                else if (_entries.isEmpty)
+                  SliverFillRemaining(child: _buildEmptyState())
+                else
+                  _buildTimelineSliver(),
+              ],
+            ),
+          ),
           Positioned(
             bottom: 16.0,
             right: 16.0,
@@ -824,9 +882,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildTimeline() {
+  Widget _buildTimelineSliver() {
     if (_entries.isEmpty && !_isLoading) {
-      return _buildEmptyState();
+      return SliverFillRemaining(child: _buildEmptyState());
     }
 
     // Sort entries by date descending
@@ -1031,7 +1089,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (index != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _scrollController.animateTo(
-            index * 250.0, // 假设平均高度 250
+            index * 250.0 + 150.0,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           );
@@ -1040,12 +1098,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _targetMonth = null; // 重置
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadEntries,
-      child: ListView.builder(
-        controller: _scrollController,
-        itemCount: items.length,
-        itemBuilder: (context, index) => items[index],
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => items[index],
+        childCount: items.length,
       ),
     );
   }
@@ -1595,6 +1651,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('Error reloading config: $e');
       // 不显示错误给用户，因为这不是关键功能
+    }
+  }
+
+  Future<void> _loadCoverImage() async {
+    final coverImagePath = currentConfig.babyCoverImagePath;
+    if (coverImagePath == null || coverImagePath.isEmpty) {
+      setState(() {
+        _coverImageData = null;
+        _isLoadingCoverImage = false;
+      });
+      return;
+    }
+
+    if (_coverImageData != null) return; // 已经加载过了
+
+    setState(() {
+      _isLoadingCoverImage = true;
+    });
+
+    try {
+      final data = await widget.cloudService.downloadMedia(coverImagePath);
+      if (mounted) {
+        setState(() {
+          _coverImageData = data;
+          _isLoadingCoverImage = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading cover image: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingCoverImage = false;
+        });
+      }
     }
   }
 }
