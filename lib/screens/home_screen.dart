@@ -576,7 +576,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+            onPressed: () {
+              // 打开左侧配置抽屉
+              Scaffold.of(context).openDrawer();
+            },
           ),
         ),
         title: GestureDetector(
@@ -626,6 +629,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         elevation: 0,
         foregroundColor: Colors.black,
         actions: [
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.access_time),
+              onPressed: () {
+                // 打开右侧时间轴抽屉
+                Scaffold.of(context).openEndDrawer();
+              },
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
@@ -657,7 +669,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
-      drawer: _buildDrawer(),
+      drawer: _buildConfigDrawer(),
+      endDrawer: _buildTimelineDrawer(),
       body: Stack(
         children: [
           if (_isLoading)
@@ -1012,7 +1025,186 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildDrawer() {
+  Widget _buildTimelineDrawer() {
+    final birthDate = currentConfig.childBirthDate;
+
+    // 1. 收集所有时间轴点：月份和出生日期
+    final Set<DateTime> timelinePoints = {};
+
+    // 添加有日记的月份
+    for (var entry in _entries) {
+      timelinePoints.add(DateTime(entry.date.year, entry.date.month));
+    }
+
+    // 添加出生日期（如果有）
+    if (birthDate != null) {
+      timelinePoints.add(birthDate);
+    }
+
+    // 2. 转换为列表并排序 (从新到旧)
+    final sortedPoints = timelinePoints.toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    return Drawer(
+      width: 200, // 窄一点的抽屉，类似时间轴条
+      child: Column(
+        children: [
+          Container(
+            height: 100,
+            padding: const EdgeInsets.only(top: 20),
+            alignment: Alignment.center,
+            child: const Text(
+              '时间轴',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            child: sortedPoints.isEmpty
+                ? const Center(child: Text('暂无记录'))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    itemCount: sortedPoints.length + 1, // +1 for "今天"
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        // 顶部 "今天" 节点
+                        return _buildTimelineItem(
+                          date: DateTime.now(),
+                          birthDate: birthDate,
+                          isToday: true,
+                          isFirst: true,
+                          isLast: sortedPoints.isEmpty,
+                          config: currentConfig,
+                        );
+                      }
+
+                      final date = sortedPoints[index - 1];
+                      return _buildTimelineItem(
+                        date: date,
+                        birthDate: birthDate,
+                        isToday: false,
+                        isFirst: false,
+                        isLast: index == sortedPoints.length,
+                        config: currentConfig,
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineItem({
+    required DateTime date,
+    required DateTime? birthDate,
+    required bool isToday,
+    required bool isFirst,
+    required bool isLast,
+    required AppConfig config,
+  }) {
+    String label;
+    bool isBirthdayMonth = false;
+    bool isBirthDay = false;
+    Color color = Colors.black87;
+    double fontSize = 14;
+    bool isTodayBirthday = false;
+
+    if (isToday) {
+      label = "今天";
+      color = Colors.pink.shade500;
+      fontSize = 16;
+      if (birthDate != null) {
+        isTodayBirthday = DateTime.now().month == birthDate.month &&
+            DateTime.now().day == birthDate.day &&
+            DateTime.now().year != birthDate.year;
+        label = isTodayBirthday ? "生日快乐！" : "今天";
+      }
+    } else if (birthDate != null) {
+      if (date == birthDate) {
+        label = "出生";
+        isBirthDay = true;
+        color = Colors.blue;
+        fontSize = 16;
+      } else if (date.day == 1) {
+        // 月份项
+        label = AgeCalculator.formatSimplifiedAgeLabel(date, config);
+        // 检查是否是生日月份（所有周岁）
+        isBirthdayMonth = date.month == birthDate.month &&
+            date.year > birthDate.year &&
+            date.day >= birthDate.day;
+        if (isBirthdayMonth) {
+          color = Colors.pink.shade500;
+          fontSize = 16;
+        }
+      } else {
+        // 其他日期（理论上不会发生）
+        label = date.toString();
+      }
+    } else {
+      if (date.day == 1) {
+        label = "${date.year}年${date.month}月";
+      } else {
+        label = date.toString();
+      }
+    }
+
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context); // Close drawer
+        // TODO: Scroll to date
+      },
+      child: SizedBox(
+        height: 50,
+        child: Row(
+          children: [
+            const SizedBox(width: 24), // Left padding
+            // Timeline line and node
+            SizedBox(
+              width: 30,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Node Icon
+                  if (isToday)
+                    Icon(
+                        isTodayBirthday ? Icons.celebration : Icons.access_time,
+                        size: 20,
+                        color: Colors.pink.shade500)
+                  else if (isBirthDay)
+                    const Icon(Icons.child_care, size: 20, color: Colors.blue)
+                  else if (isBirthdayMonth)
+                    Icon(Icons.cake, size: 20, color: Colors.pink.shade500)
+                  else
+                    // Small dot for normal months
+                    Container(
+                      width: 1,
+                      height: 50,
+                      color: Colors.grey.shade300,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: fontSize,
+                fontWeight: isBirthdayMonth || isToday
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConfigDrawer() {
     return Drawer(
       child: Column(
         children: [

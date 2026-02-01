@@ -167,9 +167,11 @@ class AgeCalculator {
     if (years == 0 && months == 0 && days == 0) {
       return '出生';
     } else if (years == 0 && months == 0) {
-      return '$days天';
+      return '1月龄';
     } else if (years == 0) {
       return '$months月龄';
+    } else if (months == 0) {
+      return '$years周岁';
     } else {
       return '$years岁$months个月';
     }
