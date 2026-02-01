@@ -4,6 +4,8 @@ import '../models/diary_entry.dart';
 import '../models/app_config.dart';
 import '../services/cloud_storage_service.dart';
 import '../screens/entry_detail_screen.dart';
+import 'full_screen_image_view.dart';
+import 'full_screen_video_player.dart';
 
 class TimelineItem extends StatefulWidget {
   final DiaryEntry entry;
@@ -38,133 +40,129 @@ class TimelineItem extends StatefulWidget {
 }
 
 class _TimelineItemState extends State<TimelineItem> {
+  bool _isPressed = false;
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Content
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EntryDetailScreen(
-                    entry: widget.entry,
-                    config: widget.config,
-                    cloudService: widget.webdavService,
-                    onEntryUpdated: widget.onEntryUpdated,
-                    onConfigChanged: widget.onConfigChanged,
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: () {
+        _navigateToDetail(context);
+      },
+      child: AnimatedScale(
+        scale: _isPressed ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Content
+            Expanded(
+              child: Card(
+                elevation: 0,
+                color: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(0),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    top: 12,
+                    bottom: 12,
                   ),
-                ),
-              ).then((result) => widget.onEntryUpdated(
-                  result ?? const EntryDetailResult(), widget.entry));
-            },
-            child: Card(
-              elevation: 0,
-              color: Colors.transparent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(0),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  top: 12,
-                  bottom: 12,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Description
-                    if (widget.entry.description.isNotEmpty) ...[
-                      Text(
-                        widget.entry.description,
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          height: 1.4,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Media Grid
-                    if (widget.entry.imagePaths.isNotEmpty ||
-                        widget.entry.videoPaths.isNotEmpty) ...[
-                      _buildMediaGrid(),
-                      const SizedBox(height: 6),
-                    ],
-
-                    // Footer info
-                    Row(
-                      children: [
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Description
+                      if (widget.entry.description.isNotEmpty) ...[
                         Text(
-                          '${widget.entry.date.year}-${widget.entry.date.month.toString().padLeft(2, '0')}-${widget.entry.date.day.toString().padLeft(2, '0')}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade500,
+                          widget.entry.description,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            height: 1.4,
+                            color: Colors.black87,
                           ),
                         ),
-                        const Spacer(),
-                        if (widget.entry.imagePaths.isNotEmpty ||
-                            widget.entry.videoPaths.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (widget.entry.imagePaths.isNotEmpty) ...[
-                                  Icon(
-                                    Icons.photo,
-                                    size: 14,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${widget.entry.imagePaths.length}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
-                                if (widget.entry.videoPaths.isNotEmpty) ...[
-                                  if (widget.entry.imagePaths.isNotEmpty)
-                                    const SizedBox(width: 8),
-                                  Icon(
-                                    Icons.videocam,
-                                    size: 14,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${widget.entry.videoPaths.length}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
-                              ],
+                        const SizedBox(height: 12),
+                      ],
+
+                      // Media Grid
+                      if (widget.entry.imagePaths.isNotEmpty ||
+                          widget.entry.videoPaths.isNotEmpty) ...[
+                        _buildMediaGrid(),
+                        const SizedBox(height: 6),
+                      ],
+
+                      // Footer info
+                      Row(
+                        children: [
+                          Text(
+                            '${widget.entry.date.year}-${widget.entry.date.month.toString().padLeft(2, '0')}-${widget.entry.date.day.toString().padLeft(2, '0')}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
                             ),
                           ),
-                      ],
-                    ),
-                  ],
+                          const Spacer(),
+                          if (widget.entry.imagePaths.isNotEmpty ||
+                              widget.entry.videoPaths.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (widget.entry.imagePaths.isNotEmpty) ...[
+                                    Icon(
+                                      Icons.photo,
+                                      size: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${widget.entry.imagePaths.length}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                  if (widget.entry.videoPaths.isNotEmpty) ...[
+                                    if (widget.entry.imagePaths.isNotEmpty)
+                                      const SizedBox(width: 8),
+                                    Icon(
+                                      Icons.videocam,
+                                      size: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${widget.entry.videoPaths.length}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -190,6 +188,7 @@ class _TimelineItemState extends State<TimelineItem> {
         child: _buildThumbnailItem(
           (displayList[0]['path'] as String).replaceAll('small', 'medium'),
           displayList[0]['isVideo'] as bool,
+          0,
         ),
       );
     }
@@ -224,7 +223,8 @@ class _TimelineItemState extends State<TimelineItem> {
                   crossAxisCount == 2
                       ? (item['path'] as String).replaceAll('small', 'medium')
                       : item['path'] as String,
-                  item['isVideo'] as bool),
+                  item['isVideo'] as bool,
+                  allThumbnails.indexOf(item)),
               Container(
                 color: Colors.black.withValues(alpha: 0.5),
                 alignment: Alignment.center,
@@ -241,69 +241,72 @@ class _TimelineItemState extends State<TimelineItem> {
           );
         }
 
-        return _buildThumbnailItem(
-            item['path'] as String, item['isVideo'] as bool);
+        return _buildThumbnailItem(item['path'] as String,
+            item['isVideo'] as bool, allThumbnails.indexOf(item));
       },
     );
   }
 
-  Widget _buildThumbnailItem(String path, bool isVideo) {
-    return FutureBuilder<Uint8List?>(
-      future: _getThumbnailData(path),
-      builder: (context, snapshot) {
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            color: Colors.grey.shade200,
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (snapshot.hasData && snapshot.data != null)
-                  Image.memory(
-                    snapshot.data!,
-                    fit: BoxFit.cover,
-                  )
-                else if (snapshot.connectionState == ConnectionState.waiting)
-                  const Center(
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                else
-                  const Center(
-                    child: Icon(
-                      Icons.image,
-                      color: Colors.grey,
-                      size: 20,
-                    ),
-                  ),
-                if (isVideo)
-                  Positioned(
-                    bottom: 2,
-                    right: 2,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: 12,
-                      ),
-                    ),
-                  ),
-              ],
+  Widget _buildThumbnailItem(String path, bool isVideo, int index) {
+    return GestureDetector(
+      onTap: () => _showMediaViewer(context, isVideo, index),
+      child: FutureBuilder<Uint8List?>(
+        future: _getThumbnailData(path),
+        builder: (context, snapshot) {
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              color: Colors.grey.shade200,
             ),
-          ),
-        );
-      },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (snapshot.hasData && snapshot.data != null)
+                    Image.memory(
+                      snapshot.data!,
+                      fit: BoxFit.cover,
+                    )
+                  else if (snapshot.connectionState == ConnectionState.waiting)
+                    const Center(
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  else
+                    const Center(
+                      child: Icon(
+                        Icons.image,
+                        color: Colors.grey,
+                        size: 20,
+                      ),
+                    ),
+                  if (isVideo)
+                    Positioned(
+                      bottom: 2,
+                      right: 2,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -334,6 +337,60 @@ class _TimelineItemState extends State<TimelineItem> {
       // 清理 Future 缓存，保留数据缓存
       widget.thumbnailFutures.remove(path);
     }
+  }
+
+  void _navigateToDetail(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EntryDetailScreen(
+          entry: widget.entry,
+          config: widget.config,
+          cloudService: widget.webdavService,
+          onEntryUpdated: widget.onEntryUpdated,
+          onConfigChanged: widget.onConfigChanged,
+        ),
+      ),
+    ).then((result) => widget.onEntryUpdated(
+        result ?? const EntryDetailResult(), widget.entry));
+  }
+
+  void _showMediaViewer(BuildContext context, bool isVideo, int index) {
+    if (isVideo) {
+      // index 是 allThumbnails 中的索引，视频部分从 imagePaths.length 开始
+      final videoIndex = index - widget.entry.imagePaths.length;
+      if (videoIndex >= 0 && videoIndex < widget.entry.videoPaths.length) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => FullScreenVideoPlayer(
+              videoPaths: widget.entry.videoPaths,
+              webdavService: widget.webdavService,
+              initialIndex: videoIndex,
+            ),
+          ),
+        );
+      }
+    } else {
+      // 图片部分，index 直接对应 imagePaths 的索引
+      if (index >= 0 && index < widget.entry.imagePaths.length) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => FullScreenImageView(
+              imagePaths: widget.entry.imagePaths,
+              webdavService: widget.webdavService,
+              initialIndex: index,
+              onSetAsCoverImage:
+                  widget.onConfigChanged != null ? _setAsCoverImage : null,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _setAsCoverImage(String imagePath) {
+    final updatedConfig = widget.config.copyWith(babyCoverImagePath: imagePath);
+    widget.onConfigChanged!(updatedConfig);
   }
 
   Future<Uint8List?> _loadThumbnailData(String path) async {
