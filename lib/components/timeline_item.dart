@@ -221,7 +221,10 @@ class _TimelineItemState extends State<TimelineItem> {
             fit: StackFit.expand,
             children: [
               _buildThumbnailItem(
-                  item['path'] as String, item['isVideo'] as bool),
+                  crossAxisCount == 2
+                      ? (item['path'] as String).replaceAll('small', 'medium')
+                      : item['path'] as String,
+                  item['isVideo'] as bool),
               Container(
                 color: Colors.black.withValues(alpha: 0.5),
                 alignment: Alignment.center,

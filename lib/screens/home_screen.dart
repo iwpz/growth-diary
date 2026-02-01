@@ -1291,60 +1291,137 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         children: [
           // 抽屉头部
           Container(
-            height: 120,
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(
+                24, MediaQuery.of(context).padding.top + 24, 24, 24),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.pink.shade300, Colors.pink.shade600],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                colors: [Colors.pink.shade400, Colors.pink.shade200],
+                begin: Alignment.bottomLeft,
+                end: Alignment.topRight,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.pink.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
-            child: const SafeArea(
-              child: Center(
-                child: Text(
-                  '宝宝成长日记',
-                  style: TextStyle(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.4),
+                      width: 2,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.auto_stories_rounded,
+                    size: 40,
                     color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
+                const SizedBox(height: 20),
+                const Text(
+                  '成长日记',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.favorite,
+                      size: 14,
+                      color: Colors.white.withOpacity(0.8),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '记录每一天的惊喜',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
 
           // 配置列表
           Expanded(
             child: ListView(
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
               children: [
-                ...configs.values.map((config) => ListTile(
+                Text(
+                  '  我的宝宝',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...configs.values.map((config) {
+                  final isSelected = currentConfigId == config.id;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.pink.shade50 : null,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
                       leading: CircleAvatar(
-                        backgroundColor: currentConfigId == config.id
+                        backgroundColor: isSelected
                             ? Colors.pink.shade100
                             : Colors.grey.shade200,
                         child: Icon(
                           Icons.child_care,
-                          color: currentConfigId == config.id
-                              ? Colors.pink
-                              : Colors.grey,
+                          color: isSelected ? Colors.pink : Colors.grey,
                         ),
                       ),
                       title: Text(
                         config.babyName,
                         style: TextStyle(
-                          fontWeight: currentConfigId == config.id
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: currentConfigId == config.id
-                              ? Colors.pink.shade700
-                              : Colors.black,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.w600,
+                          color:
+                              isSelected ? Colors.pink.shade700 : Colors.black,
                         ),
                       ),
-                      subtitle: Text(config.getAgeLabel()),
-                      trailing: currentConfigId == config.id
-                          ? const Icon(Icons.check, color: Colors.pink)
+                      subtitle: Text(
+                        config.getAgeLabel(),
+                        style: TextStyle(
+                          color: isSelected
+                              ? Colors.pink.shade400
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? CircleAvatar(
+                              radius: 12,
+                              backgroundColor: Colors.pink,
+                              child: const Icon(Icons.check,
+                                  size: 16, color: Colors.white),
+                            )
                           : null,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       onTap: () {
                         setState(() {
                           currentConfigId = config.id;
@@ -1354,23 +1431,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Navigator.of(context).pop(); // 关闭抽屉
                         _switchConfig(); // 切换配置
                       },
-                    )),
+                    ),
+                  );
+                }),
 
-                const Divider(),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Divider(),
+                ),
 
                 // 添加宝宝选项
                 ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   leading: CircleAvatar(
-                    backgroundColor: Colors.pink.shade100,
+                    backgroundColor: Colors.grey.shade100,
                     child: const Icon(
                       Icons.add,
-                      color: Colors.pink,
+                      color: Colors.black87,
                     ),
                   ),
                   title: const Text(
                     '添加宝宝',
                     style: TextStyle(
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   onTap: () {
