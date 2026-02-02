@@ -403,7 +403,7 @@ class BackgroundUploadService {
               task.config,
               (uploaded, total) {
                 // 图片上传进度：设置总数
-                task.uploadedCount = task.uploadedCount + uploaded;
+                task.uploadedCount = uploaded;
                 print(
                     'Image upload progress: uploaded=$uploaded, total=$total, task.uploadedCount=${task.uploadedCount}/${task.mediaPaths.length}');
                 _showProgressNotification(

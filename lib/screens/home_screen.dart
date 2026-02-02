@@ -575,7 +575,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     int uploadedFilesCount = 0;
     for (final task in activeTasks) {
       totalUploadFiles += task.mediaPaths.length;
-      uploadedFilesCount = (task.uploadedCount / 4).floor();
+      uploadedFilesCount += task.uploadedCount; // 每个文件上传分为两步：上传文件和缩略图
     }
 
     final hasActiveTasks = activeTasks.isNotEmpty;
