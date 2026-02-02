@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_trimmer/video_trimmer.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 
 class BatchVideoEditorScreen extends StatefulWidget {
@@ -27,10 +29,13 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
   // 存储每个视频的编辑状态
   final List<Map<String, dynamic>> _videoStates = [];
 
+  // 存储视频缩略图
+  final List<String?> _thumbnails = [];
+
   @override
   void initState() {
     super.initState();
-    // 初始化每个视频的状态
+    // 初始化每个视频的状态和缩略图
     for (int i = 0; i < widget.videoPaths.length; i++) {
       _videoStates.add({
         'isEdited': false,
@@ -38,8 +43,36 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
         'endValue': 0.0,
         'trimmedPath': null,
       });
+      _thumbnails.add(null);
     }
+
+    // 异步生成缩略图
+    _generateThumbnails();
+
     _loadCurrentVideo();
+  }
+
+  Future<void> _generateThumbnails() async {
+    for (int i = 0; i < widget.videoPaths.length; i++) {
+      try {
+        final thumbnailPath = await VideoThumbnail.thumbnailFile(
+          video: widget.videoPaths[i],
+          thumbnailPath: (await getTemporaryDirectory()).path,
+          imageFormat: ImageFormat.JPEG,
+          maxWidth: 200,
+          quality: 75,
+        );
+
+        if (mounted) {
+          setState(() {
+            _thumbnails[i] = thumbnailPath;
+          });
+        }
+      } catch (e) {
+        // 生成缩略图失败，使用默认占位符
+        debugPrint('生成视频缩略图失败: $e');
+      }
+    }
   }
 
   void _loadCurrentVideo() async {
@@ -55,6 +88,18 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
   @override
   void dispose() {
     _trimmer.dispose();
+
+    // 清理所有缩略图文件
+    for (final thumbnailPath in _thumbnails) {
+      if (thumbnailPath != null) {
+        try {
+          File(thumbnailPath).deleteSync();
+        } catch (e) {
+          // 忽略删除失败的错误
+        }
+      }
+    }
+
     super.dispose();
   }
 
@@ -129,9 +174,19 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
     }
 
     setState(() {
+      // 删除缩略图文件
+      if (_thumbnails[index] != null) {
+        try {
+          File(_thumbnails[index]!).deleteSync();
+        } catch (e) {
+          // 忽略删除失败的错误
+        }
+      }
+
       widget.videoPaths.removeAt(index);
       widget.originalDates.removeAt(index);
       _videoStates.removeAt(index);
+      _thumbnails.removeAt(index);
 
       // 调整当前索引
       if (_currentIndex >= index && _currentIndex > 0) {
@@ -335,15 +390,23 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
                     ),
                     child: Stack(
                       children: [
-                        // 视频缩略图（简化版，这里用占位符）
+                        // 视频缩略图
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.grey.shade200,
                             borderRadius: BorderRadius.circular(6),
+                            image: _thumbnails[index] != null
+                                ? DecorationImage(
+                                    image: FileImage(File(_thumbnails[index]!)),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
                           ),
-                          child: const Center(
-                            child: Icon(Icons.video_file, size: 32),
-                          ),
+                          child: _thumbnails[index] == null
+                              ? const Center(
+                                  child: Icon(Icons.video_file, size: 32),
+                                )
+                              : null,
                         ),
 
                         // 编辑状态指示器
