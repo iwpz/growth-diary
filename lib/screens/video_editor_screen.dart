@@ -212,7 +212,6 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
                     trimmer: _trimmer,
                     viewerHeight: 50,
                     viewerWidth: MediaQuery.of(context).size.width,
-                    maxVideoLength: const Duration(seconds: 10),
                     onChangeStart: (value) => _startValue = value,
                     onChangeEnd: (value) => _endValue = value,
                     onChangePlaybackState: (value) =>

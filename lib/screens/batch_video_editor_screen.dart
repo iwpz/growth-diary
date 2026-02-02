@@ -342,7 +342,6 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
                         trimmer: _trimmer,
                         viewerHeight: 50,
                         viewerWidth: MediaQuery.of(context).size.width - 32,
-                        maxVideoLength: const Duration(seconds: 10),
                         onChangeStart: (value) =>
                             setState(() => _startValue = value),
                         onChangeEnd: (value) =>
