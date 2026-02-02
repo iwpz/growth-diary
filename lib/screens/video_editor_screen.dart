@@ -66,14 +66,18 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
             final originalStat = originalFile.statSync();
             trimmedFile.setLastModifiedSync(originalStat.modified);
 
-            Navigator.of(context).pop({
-              'path': trimmedPath,
-              'originalDate': widget.originalDate,
-            });
+            if (mounted) {
+              Navigator.of(context).pop({
+                'path': trimmedPath,
+                'originalDate': widget.originalDate,
+              });
+            }
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('视频剪辑失败')),
-            );
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('视频剪辑失败')),
+              );
+            }
           }
           setState(() {
             _progressVisibility = false;
@@ -84,96 +88,167 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> {
       setState(() {
         _progressVisibility = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('视频剪辑失败: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('视频剪辑失败: $e')),
+        );
+      }
     }
+  }
+
+  Future<bool> _onWillPop() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('放弃编辑'),
+        content: const Text('确定要放弃视频编辑吗？未保存的更改将会丢失。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false), // 取消放弃
+            child: const Text('继续编辑'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true), // 确认放弃
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('放弃'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false; // 如果用户点击对话框外部，默认不放弃
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('编辑视频'),
-        actions: [
-          TextButton(
-            onPressed: _saveVideo,
-            child: const Text(
-              '完成',
-              style: TextStyle(color: Colors.white),
+    return PopScope(
+      canPop: false, // 阻止默认的弹出行为
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (didPop || !mounted) return; // 如果已经弹出或组件未挂载，不做任何事情
+
+        final shouldPop = await _onWillPop();
+        if (shouldPop) {
+          // 返回取消信号
+          // ignore: use_build_context_synchronously
+          Navigator.of(context).pop({'cancelled': true});
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('编辑视频'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () async {
+              if (!mounted) return;
+
+              final shouldPop = await _onWillPop();
+              if (shouldPop) {
+                // 返回取消信号
+                // ignore: use_build_context_synchronously
+                Navigator.of(context).pop({'cancelled': true});
+              }
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                if (!mounted) return;
+
+                final shouldPop = await _onWillPop();
+                if (shouldPop) {
+                  // 返回取消信号
+                  // ignore: use_build_context_synchronously
+                  Navigator.of(context).pop({'cancelled': true});
+                }
+              },
+              child: const Text(
+                '放弃',
+                style: TextStyle(
+                    color: Color.fromARGB(255, 174, 174, 174),
+                    fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // 视频播放器
-          Expanded(
-            child: VideoViewer(trimmer: _trimmer),
-          ),
-
-          // 进度条和控制
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.black87,
-            child: Column(
-              children: [
-                // 时间显示
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _formatDuration(Duration(seconds: _startValue.toInt())),
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    Text(
-                      _formatDuration(Duration(seconds: _endValue.toInt())),
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ],
+            TextButton(
+              onPressed: _saveVideo,
+              child: Text(
+                '完成',
+                style: TextStyle(
+                  color: Colors.pink.shade500,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // 视频播放器
+            Expanded(
+              child: VideoViewer(trimmer: _trimmer),
+            ),
 
-                // 剪辑进度条
-                TrimViewer(
-                  trimmer: _trimmer,
-                  viewerHeight: 50,
-                  viewerWidth: MediaQuery.of(context).size.width,
-                  maxVideoLength: const Duration(seconds: 10),
-                  onChangeStart: (value) => _startValue = value,
-                  onChangeEnd: (value) => _endValue = value,
-                  onChangePlaybackState: (value) =>
-                      setState(() => _isPlaying = value),
-                ),
-
-                // 播放控制
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        _isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: Colors.white,
+            // 进度条和控制
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.black87,
+              child: Column(
+                children: [
+                  // 时间显示
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(Duration(seconds: _startValue.toInt())),
+                        style: const TextStyle(color: Colors.white),
                       ),
-                      onPressed: () async {
-                        final playbackState =
-                            await _trimmer.videoPlaybackControl(
-                          startValue: _startValue,
-                          endValue: _endValue,
-                        );
-                        setState(() {
-                          _isPlaying = playbackState;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+                      Text(
+                        _formatDuration(Duration(seconds: _endValue.toInt())),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
 
-          // 进度指示器
-          if (_progressVisibility) const LinearProgressIndicator(),
-        ],
+                  // 剪辑进度条
+                  TrimViewer(
+                    trimmer: _trimmer,
+                    viewerHeight: 50,
+                    viewerWidth: MediaQuery.of(context).size.width,
+                    maxVideoLength: const Duration(seconds: 10),
+                    onChangeStart: (value) => _startValue = value,
+                    onChangeEnd: (value) => _endValue = value,
+                    onChangePlaybackState: (value) =>
+                        setState(() => _isPlaying = value),
+                  ),
+
+                  // 播放控制
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: Colors.white,
+                        ),
+                        onPressed: () async {
+                          final playbackState =
+                              await _trimmer.videoPlaybackControl(
+                            startValue: _startValue,
+                            endValue: _endValue,
+                          );
+                          setState(() {
+                            _isPlaying = playbackState;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // 进度指示器
+            if (_progressVisibility) const LinearProgressIndicator(),
+          ],
+        ),
       ),
     );
   }

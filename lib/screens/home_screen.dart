@@ -15,7 +15,7 @@ import '../services/local_storage_service.dart';
 import '../services/qr_service.dart';
 import 'settings_screen.dart';
 import 'diary_editor_screen.dart';
-import 'video_editor_screen.dart';
+import 'batch_video_editor_screen.dart';
 import '../components/birth_date_label.dart';
 import '../components/pregnancy_label.dart';
 import '../components/current_month_separator.dart';
@@ -503,52 +503,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         }
       }
 
-      // 视频编辑步骤
-      final editedPaths = <String>[];
-      for (int i = 0; i < mediaPaths.length; i++) {
-        final path = mediaPaths[i];
-        final originalDate = originalDates[i];
-
-        // 询问用户是否需要编辑
-        final shouldEdit = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('视频编辑'),
-            content: const Text('是否需要对视频进行时间剪辑？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('跳过'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('编辑'),
-              ),
-            ],
+      // 视频编辑步骤 - 批量编辑界面
+      final editResults = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BatchVideoEditorScreen(
+            videoPaths: List.from(mediaPaths),
+            originalDates: List.from(originalDates),
           ),
-        );
+        ),
+      );
 
-        if (shouldEdit == true) {
-          // 进入视频编辑页面
-          final editResult = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => VideoEditorScreen(
-                videoPath: path,
-                originalDate: originalDate,
-              ),
-            ),
-          );
-
-          if (editResult != null && editResult['path'] != null) {
-            editedPaths.add(editResult['path']);
-          } else {
-            // 用户取消编辑，使用原文件
-            editedPaths.add(path);
-          }
-        } else {
-          editedPaths.add(path);
+      final editedPaths = <String>[];
+      if (editResults != null) {
+        // 用户完成了编辑，使用编辑结果
+        for (final result in editResults) {
+          editedPaths.add(result['path']);
         }
+      } else {
+        // 用户放弃了所有编辑，取消上传
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('已取消视频上传')),
+          );
+        }
+        return;
       }
 
       // 检查并压缩大视频
@@ -577,6 +556,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         } else {
           compressedPaths.add(path);
         }
+      }
+
+      // 如果没有有效的视频文件，取消上传
+      if (compressedPaths.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('没有有效的视频文件，取消上传')),
+          );
+        }
+        return;
       }
 
       // 启动后台上传
