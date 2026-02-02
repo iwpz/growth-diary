@@ -242,6 +242,11 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 获取颜色方案
+    final primaryColor = Theme.of(context).primaryColor;
+    const backgroundColor = Colors.black;
+    const surfaceColor = Color(0xFF1E1E1E);
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) async {
@@ -249,15 +254,20 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
 
         final shouldPop = await _onWillPop();
         if (shouldPop) {
-          // 返回取消信号
           // ignore: use_build_context_synchronously
           Navigator.of(context).pop(null);
         }
       },
       child: Scaffold(
+        backgroundColor: backgroundColor,
         appBar: AppBar(
-          title:
-              Text('编辑视频 (${_currentIndex + 1}/${widget.videoPaths.length})'),
+          backgroundColor: backgroundColor,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          title: Text(
+            '编辑视频 (${_currentIndex + 1}/${widget.videoPaths.length})',
+            style: const TextStyle(color: Colors.white, fontSize: 18),
+          ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () async {
@@ -265,7 +275,6 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
 
               final shouldPop = await _onWillPop();
               if (shouldPop) {
-                // 返回取消信号
                 // ignore: use_build_context_synchronously
                 Navigator.of(context).pop(null);
               }
@@ -278,189 +287,239 @@ class _BatchVideoEditorScreenState extends State<BatchVideoEditorScreen> {
 
                 final shouldPop = await _onWillPop();
                 if (shouldPop) {
-                  // 返回取消信号
                   // ignore: use_build_context_synchronously
                   Navigator.of(context).pop(null);
                 }
               },
-              child: Text(
+              child: const Text(
                 '放弃',
-                style: TextStyle(color: Colors.grey.shade500),
+                style: TextStyle(color: Colors.white70),
               ),
             ),
-            TextButton(
-              onPressed: _finishEditing,
-              child: Text(
-                '完成',
-                style: TextStyle(
-                  color: Colors.pink.shade900,
-                  fontWeight: FontWeight.bold,
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0, top: 4, bottom: 4),
+              child: FilledButton(
+                onPressed: _finishEditing,
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                 ),
+                child: const Text('完成',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
           ],
         ),
-        body: Column(
-          children: [
-            // 视频播放器
-            Expanded(
-              flex: 2,
-              child: VideoViewer(trimmer: _trimmer),
-            ),
-
-            // 进度条和控制
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                children: [
-                  // 进度条
-                  TrimViewer(
-                    trimmer: _trimmer,
-                    viewerHeight: 50,
-                    viewerWidth: MediaQuery.of(context).size.width,
-                    maxVideoLength: const Duration(seconds: 10),
-                    onChangeStart: (value) =>
-                        setState(() => _startValue = value),
-                    onChangeEnd: (value) => setState(() => _endValue = value),
-                    onChangePlaybackState: (value) =>
-                        setState(() => _isPlaying = value),
+        body: SafeArea(
+          child: Column(
+            children: [
+              // 视频播放器
+              Expanded(
+                child: Container(
+                  color: Colors.black,
+                  child: Center(
+                    child: VideoViewer(trimmer: _trimmer),
                   ),
+                ),
+              ),
 
-                  // 时间显示
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(_formatDuration(
-                          Duration(seconds: _startValue.toInt()))),
-                      Text(_formatDuration(
-                          Duration(seconds: _endValue.toInt()))),
-                    ],
-                  ),
+              // 控制区域和视频列表的容器
+              Container(
+                decoration: const BoxDecoration(
+                  color: surfaceColor,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 16),
 
-                  // 控制按钮
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                        onPressed: () async {
-                          final playbackState =
-                              await _trimmer.videoPlaybackControl(
-                            startValue: _startValue,
-                            endValue: _endValue,
+                    // 进度条 TrimViewer
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TrimViewer(
+                        trimmer: _trimmer,
+                        viewerHeight: 50,
+                        viewerWidth: MediaQuery.of(context).size.width - 32,
+                        maxVideoLength: const Duration(seconds: 10),
+                        onChangeStart: (value) =>
+                            setState(() => _startValue = value),
+                        onChangeEnd: (value) =>
+                            setState(() => _endValue = value),
+                        onChangePlaybackState: (value) =>
+                            setState(() => _isPlaying = value),
+                        // 样式参数
+                        durationStyle: DurationStyle.FORMAT_MM_SS,
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // 时间显示和控制按钮
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                              _formatDuration(
+                                  Duration(seconds: _startValue.toInt())),
+                              style: const TextStyle(color: Colors.white70)),
+
+                          // 播放控制区
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                    _isPlaying
+                                        ? Icons.pause_circle_filled
+                                        : Icons.play_circle_fill,
+                                    size: 48,
+                                    color: Colors.white),
+                                onPressed: () async {
+                                  final playbackState =
+                                      await _trimmer.videoPlaybackControl(
+                                    startValue: _startValue,
+                                    endValue: _endValue,
+                                  );
+                                  setState(() => _isPlaying = playbackState);
+                                },
+                              ),
+                              const SizedBox(width: 12),
+                              ElevatedButton.icon(
+                                onPressed: _saveCurrentVideo,
+                                icon: const Icon(Icons.check, size: 18),
+                                label: const Text('应用剪辑'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      Colors.white.withValues(alpha: 0.1),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          Text(
+                              _formatDuration(
+                                  Duration(seconds: _endValue.toInt())),
+                              style: const TextStyle(color: Colors.white70)),
+                        ],
+                      ),
+                    ),
+
+                    const Divider(color: Colors.white12, height: 24),
+
+                    // 视频列表
+                    SizedBox(
+                      height: 110,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        itemCount: widget.videoPaths.length,
+                        itemBuilder: (context, index) {
+                          final isSelected = index == _currentIndex;
+                          final isEdited = _videoStates[index]['isEdited'];
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: GestureDetector(
+                              onTap: () => _switchToVideo(index),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  // 视频缩略图容器
+                                  Container(
+                                    width: 76,
+                                    height: 90,
+                                    margin: const EdgeInsets.only(
+                                        top: 8, right: 8), // 留出右上角按钮空间
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: isSelected
+                                          ? Border.all(
+                                              color: primaryColor, width: 2)
+                                          : null,
+                                      image: _thumbnails[index] != null
+                                          ? DecorationImage(
+                                              image: FileImage(
+                                                  File(_thumbnails[index]!)),
+                                              fit: BoxFit.cover,
+                                              colorFilter: isSelected
+                                                  ? null
+                                                  : const ColorFilter.mode(
+                                                      Colors.black45,
+                                                      BlendMode.darken),
+                                            )
+                                          : null,
+                                      color: Colors.grey[800],
+                                    ),
+                                    child: _thumbnails[index] == null
+                                        ? const Center(
+                                            child: Icon(Icons.videocam,
+                                                color: Colors.white24))
+                                        : null,
+                                  ),
+
+                                  // 编辑状态指示器
+                                  if (isEdited)
+                                    Positioned(
+                                      bottom: 4,
+                                      right: 12, // 考虑 margin
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.green,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.check,
+                                            size: 12, color: Colors.white),
+                                      ),
+                                    ),
+
+                                  // 移除按钮
+                                  if (widget.videoPaths.length > 1)
+                                    Positioned(
+                                      top: 0,
+                                      right: 0,
+                                      child: GestureDetector(
+                                        onTap: () => _removeVideo(index),
+                                        child: Container(
+                                          decoration: const BoxDecoration(
+                                            color: Colors.red,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                  color: Colors.black26,
+                                                  blurRadius: 2)
+                                            ],
+                                          ),
+                                          padding: const EdgeInsets.all(4),
+                                          child: const Icon(Icons.close,
+                                              size: 12, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           );
-                          setState(() => _isPlaying = playbackState);
                         },
                       ),
-                      const SizedBox(width: 16),
-                      ElevatedButton(
-                        onPressed: _saveCurrentVideo,
-                        child: const Text('应用剪辑'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // 视频列表
-            Container(
-              height: 120,
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.grey.shade300)),
-              ),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: widget.videoPaths.length,
-                itemBuilder: (context, index) {
-                  final isSelected = index == _currentIndex;
-                  final isEdited = _videoStates[index]['isEdited'];
-
-                  return Container(
-                    width: 100,
-                    margin: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: isSelected
-                            ? Theme.of(context).primaryColor
-                            : Colors.grey,
-                        width: isSelected ? 2 : 1,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Stack(
-                      children: [
-                        // 视频缩略图
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(6),
-                            image: _thumbnails[index] != null
-                                ? DecorationImage(
-                                    image: FileImage(File(_thumbnails[index]!)),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
-                          ),
-                          child: _thumbnails[index] == null
-                              ? const Center(
-                                  child: Icon(Icons.video_file, size: 32),
-                                )
-                              : null,
-                        ),
-
-                        // 编辑状态指示器
-                        if (isEdited)
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: const BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 12,
-                              ),
-                            ),
-                          ),
-
-                        // 点击切换视频
-                        Positioned.fill(
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(6),
-                              onTap: () => _switchToVideo(index),
-                            ),
-                          ),
-                        ),
-
-                        // 移除按钮
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: IconButton(
-                            icon: const Icon(Icons.close, size: 16),
-                            onPressed: () => _removeVideo(index),
-                            color: Colors.red,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                    const SizedBox(height: 12),
+                    // 进度指示器
+                    if (_progressVisibility)
+                      LinearProgressIndicator(
+                        backgroundColor: Colors.white10,
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                      ),
+                  ],
+                ),
               ),
-            ),
-
-            // 进度指示器
-            if (_progressVisibility) const LinearProgressIndicator(),
-          ],
+            ],
+          ),
         ),
       ),
     );
