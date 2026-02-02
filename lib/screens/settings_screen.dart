@@ -130,6 +130,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _editVideoCompressionThreshold() async {
+    int newThreshold = _config.videoCompressionThreshold;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('设置视频压缩阈值'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('当视频文件大小超过此阈值时，将自动压缩。设置为0表示始终不压缩。'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: TextEditingController(text: newThreshold.toString()),
+              keyboardType: TextInputType.number,
+              onChanged: (value) =>
+                  newThreshold = int.tryParse(value) ?? newThreshold,
+              decoration: const InputDecoration(
+                hintText: '请输入阈值（MB）',
+                suffixText: 'MB',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (result == true) {
+      final updatedConfig =
+          _config.copyWith(videoCompressionThreshold: newThreshold);
+      setState(() {
+        _config = updatedConfig;
+      });
+      await _localStorage.saveConfig(_config);
+      await widget.cloudService.saveConfig(_config);
+      widget.onConfigChanged(_config);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('视频压缩阈值已更新')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -170,6 +222,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: _editConceptionDate,
+          ),
+          const Divider(),
+          _buildSection('上传设置'),
+          ListTile(
+            leading: const Icon(Icons.video_file),
+            title: const Text('视频压缩阈值'),
+            subtitle: Text(
+              _config.videoCompressionThreshold == 0
+                  ? '始终不压缩'
+                  : '${_config.videoCompressionThreshold} MB',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _editVideoCompressionThreshold,
           ),
           const Divider(),
           _buildSection('云存储配置'),

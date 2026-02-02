@@ -273,14 +273,14 @@ class WebDAVService implements CloudStorageService {
       // 生成中号缩略图 (用于详情页)
       final image = img.decodeImage(await file.readAsBytes());
       if (image != null) {
-        final mediumThumbnail = img.copyResize(image, width: 400);
+        final mediumThumbnail = img.copyResize(image, width: 768);
         final mediumData = img.encodeJpg(mediumThumbnail, quality: 85);
         final mediumFileName = '${fileName}_medium.jpg';
         final mediumPath = _getThumbnailsPath(mediumFileName);
         await _client!.write(mediumPath, mediumData);
 
         // 生成小号缩略图 (用于时间轴)
-        final smallThumbnail = img.copyResize(image, width: 200);
+        final smallThumbnail = img.copyResize(image, width: 400);
         final smallData = img.encodeJpg(smallThumbnail, quality: 80);
         final smallFileName = '${fileName}_small.jpg';
         final smallPath = _getThumbnailsPath(smallFileName);
@@ -314,7 +314,7 @@ class WebDAVService implements CloudStorageService {
         thumbnail = await VideoThumbnail.thumbnailData(
           video: file.path,
           imageFormat: ImageFormat.JPEG,
-          maxWidth: 400, // 中号缩略图
+          maxWidth: 768, // 中号缩略图
           quality: 75,
           timeMs: 1000, // 从第1秒开始获取缩略图
         );
@@ -333,7 +333,7 @@ class WebDAVService implements CloudStorageService {
           thumbnail = await VideoThumbnail.thumbnailData(
             video: file.path,
             imageFormat: ImageFormat.JPEG,
-            maxWidth: 400,
+            maxWidth: 768,
             quality: 75,
             timeMs: 0, // 从开始位置
           );
@@ -367,7 +367,7 @@ class WebDAVService implements CloudStorageService {
       // 生成小号缩略图
       final image = img.decodeImage(thumbnail);
       if (image != null) {
-        final smallThumbnail = img.copyResize(image, width: 200);
+        final smallThumbnail = img.copyResize(image, width: 400);
         final smallData = img.encodeJpg(smallThumbnail, quality: 70);
         final smallFileName = '${fileName}_small.jpg';
         final smallPath = _getThumbnailsPath(smallFileName);

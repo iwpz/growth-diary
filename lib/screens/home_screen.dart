@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:video_compress/video_compress.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/cloud_storage_service.dart';
@@ -14,6 +15,7 @@ import '../services/local_storage_service.dart';
 import '../services/qr_service.dart';
 import 'settings_screen.dart';
 import 'diary_editor_screen.dart';
+import 'video_editor_screen.dart';
 import '../components/birth_date_label.dart';
 import '../components/pregnancy_label.dart';
 import '../components/current_month_separator.dart';
@@ -489,12 +491,97 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (description == null) return;
       }
 
-      // 获取文件路径
-      final mediaPaths = result.files.map((file) => file.path!).toList();
+      // 获取文件路径和创建时间
+      final mediaPaths = <String>[];
+      final originalDates = <DateTime>[];
+      for (final file in result.files) {
+        if (file.path != null) {
+          mediaPaths.add(file.path!);
+          final videoFile = File(file.path!);
+          final stat = await videoFile.stat();
+          originalDates.add(stat.modified);
+        }
+      }
+
+      // 视频编辑步骤
+      final editedPaths = <String>[];
+      for (int i = 0; i < mediaPaths.length; i++) {
+        final path = mediaPaths[i];
+        final originalDate = originalDates[i];
+
+        // 询问用户是否需要编辑
+        final shouldEdit = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('视频编辑'),
+            content: const Text('是否需要对视频进行时间剪辑？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('跳过'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('编辑'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldEdit == true) {
+          // 进入视频编辑页面
+          final editResult = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoEditorScreen(
+                videoPath: path,
+                originalDate: originalDate,
+              ),
+            ),
+          );
+
+          if (editResult != null && editResult['path'] != null) {
+            editedPaths.add(editResult['path']);
+          } else {
+            // 用户取消编辑，使用原文件
+            editedPaths.add(path);
+          }
+        } else {
+          editedPaths.add(path);
+        }
+      }
+
+      // 检查并压缩大视频
+      final compressedPaths = <String>[];
+      for (final path in editedPaths) {
+        final file = File(path);
+        final sizeInMB = await file.length() / (1024 * 1024);
+        if (currentConfig.videoCompressionThreshold > 0 &&
+            sizeInMB > currentConfig.videoCompressionThreshold) {
+          // 显示压缩提示
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text(
+                      '视频超过${currentConfig.videoCompressionThreshold}MB，正在压缩...')),
+            );
+          }
+          // 压缩视频
+          final compressedFile = await _compressVideo(path);
+          if (compressedFile != null) {
+            compressedPaths.add(compressedFile.path);
+          } else {
+            // 压缩失败，使用原文件
+            compressedPaths.add(path);
+          }
+        } else {
+          compressedPaths.add(path);
+        }
+      }
 
       // 启动后台上传
       await BackgroundUploadService.startBackgroundUpload(
-        mediaPaths: mediaPaths,
+        mediaPaths: compressedPaths,
         description: description,
         config: currentConfig,
         overrideDate: selectedDate,
@@ -515,6 +602,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           SnackBar(content: Text('启动后台上传失败: $e')),
         );
       }
+    }
+  }
+
+  Future<File?> _compressVideo(String videoPath) async {
+    try {
+      final info = await VideoCompress.compressVideo(
+        videoPath,
+        quality: VideoQuality.MediumQuality,
+        deleteOrigin: false, // 不删除原文件
+      );
+      return info?.file;
+    } catch (e) {
+      debugPrint('Video compression failed: $e');
+      return null;
     }
   }
 

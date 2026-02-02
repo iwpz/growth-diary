@@ -37,6 +37,8 @@ dependencies:
   screenshot: ^3.0.0
   file_picker: ^8.0.7
   flutter_video_info: ^1.2.0
+  video_compress: ^3.1.2
+  video_trimmer: ^5.0.0
 
 dev_dependencies:
   flutter_test:

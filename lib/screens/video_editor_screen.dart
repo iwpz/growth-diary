@@ -1,0 +1,180 @@
+import 'package:flutter/material.dart';
+import 'package:video_trimmer/video_trimmer.dart';
+import 'dart:io';
+
+class VideoEditorScreen extends StatefulWidget {
+  final String videoPath;
+  final DateTime originalDate;
+
+  const VideoEditorScreen({
+    super.key,
+    required this.videoPath,
+    required this.originalDate,
+  });
+
+  @override
+  State<VideoEditorScreen> createState() => _VideoEditorScreenState();
+}
+
+class _VideoEditorScreenState extends State<VideoEditorScreen> {
+  final Trimmer _trimmer = Trimmer();
+  double _startValue = 0.0;
+  double _endValue = 0.0;
+  bool _isPlaying = false;
+  bool _progressVisibility = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVideo();
+  }
+
+  void _loadVideo() async {
+    await _trimmer.loadVideo(videoFile: File(widget.videoPath));
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _trimmer.dispose();
+    super.dispose();
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
+  }
+
+  Future<void> _saveVideo() async {
+    setState(() {
+      _progressVisibility = true;
+    });
+
+    try {
+      await _trimmer.saveTrimmedVideo(
+        startValue: _startValue,
+        endValue: _endValue,
+        onSave: (String? trimmedPath) {
+          if (trimmedPath != null) {
+            // 保留原始文件的创建时间
+            final originalFile = File(widget.videoPath);
+            final trimmedFile = File(trimmedPath);
+
+            // 复制文件的修改时间
+            final originalStat = originalFile.statSync();
+            trimmedFile.setLastModifiedSync(originalStat.modified);
+
+            Navigator.of(context).pop({
+              'path': trimmedPath,
+              'originalDate': widget.originalDate,
+            });
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('视频剪辑失败')),
+            );
+          }
+          setState(() {
+            _progressVisibility = false;
+          });
+        },
+      );
+    } catch (e) {
+      setState(() {
+        _progressVisibility = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('视频剪辑失败: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('编辑视频'),
+        actions: [
+          TextButton(
+            onPressed: _saveVideo,
+            child: const Text(
+              '完成',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // 视频播放器
+          Expanded(
+            child: VideoViewer(trimmer: _trimmer),
+          ),
+
+          // 进度条和控制
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.black87,
+            child: Column(
+              children: [
+                // 时间显示
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _formatDuration(Duration(seconds: _startValue.toInt())),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    Text(
+                      _formatDuration(Duration(seconds: _endValue.toInt())),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+
+                // 剪辑进度条
+                TrimViewer(
+                  trimmer: _trimmer,
+                  viewerHeight: 50,
+                  viewerWidth: MediaQuery.of(context).size.width,
+                  maxVideoLength: const Duration(seconds: 10),
+                  onChangeStart: (value) => _startValue = value,
+                  onChangeEnd: (value) => _endValue = value,
+                  onChangePlaybackState: (value) =>
+                      setState(() => _isPlaying = value),
+                ),
+
+                // 播放控制
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        _isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.white,
+                      ),
+                      onPressed: () async {
+                        final playbackState =
+                            await _trimmer.videoPlaybackControl(
+                          startValue: _startValue,
+                          endValue: _endValue,
+                        );
+                        setState(() {
+                          _isPlaying = playbackState;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // 进度指示器
+          if (_progressVisibility) const LinearProgressIndicator(),
+        ],
+      ),
+    );
+  }
+}

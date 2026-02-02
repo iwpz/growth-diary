@@ -64,6 +64,7 @@ class AppConfig {
   DateTime? babyBirthDate;
   DateTime? babyConceptionDate;
   String? babyCoverImagePath; // 宝宝封面图路径
+  int videoCompressionThreshold; // 视频压缩阈值，单位MB，0表示不压缩
 
   AppConfig({
     this.id = '',
@@ -74,6 +75,7 @@ class AppConfig {
     this.babyBirthDate,
     this.babyConceptionDate,
     this.babyCoverImagePath,
+    this.videoCompressionThreshold = 10, // 默认10MB
   }) {
     if (id.isEmpty) {
       id = const Uuid().v4();
@@ -115,6 +117,7 @@ class AppConfig {
     DateTime? babyBirthDate,
     DateTime? babyConceptionDate,
     String? babyCoverImagePath,
+    int? videoCompressionThreshold,
   }) {
     return AppConfig(
       id: id ?? this.id,
@@ -125,6 +128,8 @@ class AppConfig {
       babyBirthDate: babyBirthDate ?? this.babyBirthDate,
       babyConceptionDate: babyConceptionDate ?? this.babyConceptionDate,
       babyCoverImagePath: babyCoverImagePath ?? this.babyCoverImagePath,
+      videoCompressionThreshold:
+          videoCompressionThreshold ?? this.videoCompressionThreshold,
     );
   }
 
@@ -138,6 +143,7 @@ class AppConfig {
       'babyBirthDate': babyBirthDate?.toIso8601String(),
       'babyConceptionDate': babyConceptionDate?.toIso8601String(),
       'babyCoverImagePath': babyCoverImagePath,
+      'videoCompressionThreshold': videoCompressionThreshold,
     };
   }
 
@@ -159,6 +165,7 @@ class AppConfig {
               ? DateTime.parse(json['conceptionDate'])
               : null),
       babyCoverImagePath: json['babyCoverImagePath'],
+      videoCompressionThreshold: json['videoCompressionThreshold'] ?? 10,
     );
   }
 }
