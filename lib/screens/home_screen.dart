@@ -505,6 +505,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // 视频编辑步骤 - 批量编辑界面
       final editResults = await Navigator.push(
+        // ignore: use_build_context_synchronously
         context,
         MaterialPageRoute(
           builder: (context) => BatchVideoEditorScreen(
@@ -798,7 +799,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     // 蒙版
                     Container(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
                     ),
                   ] else if (_isLoadingCoverImage)
                     const Center(
@@ -1392,7 +1393,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.pink.withOpacity(0.3),
+                  color: Colors.pink.withValues(alpha: 0.3),
                   blurRadius: 10,
                   offset: const Offset(0, 5),
                 ),
@@ -1404,10 +1405,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.4),
+                      color: Colors.white.withValues(alpha: 0.4),
                       width: 2,
                     ),
                   ),
@@ -1433,13 +1434,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     Icon(
                       Icons.favorite,
                       size: 14,
-                      color: Colors.white.withOpacity(0.8),
+                      color: Colors.white.withValues(alpha: 0.8),
                     ),
                     const SizedBox(width: 6),
                     Text(
                       '记录每一天的惊喜',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -1502,10 +1503,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                       ),
                       trailing: isSelected
-                          ? CircleAvatar(
+                          ? const CircleAvatar(
                               radius: 12,
                               backgroundColor: Colors.pink,
-                              child: const Icon(Icons.check,
+                              child: Icon(Icons.check,
                                   size: 16, color: Colors.white),
                             )
                           : null,
@@ -1670,6 +1671,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           .setCurrentConfigId(newConfig.id);
 
                       // 关闭对话框并切换到新宝宝
+                      // ignore: use_build_context_synchronously
                       Navigator.of(context).pop();
                       Future.delayed(Duration.zero, () => _switchConfig());
                     }

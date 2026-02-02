@@ -60,7 +60,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 20,
                       offset: const Offset(0, 8),
                     ),
@@ -127,7 +127,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                         size: 200.0,
                         errorCorrectionLevel: QrErrorCorrectLevel.M,
                         // Add some style to QR dots if possible or keep simple
-                        foregroundColor: const Color(0xFFE91E63),
+                        dataModuleStyle:
+                            const QrDataModuleStyle(color: Color(0xFFE91E63)),
+                        eyeStyle: const QrEyeStyle(color: Color(0xFFE91E63)),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -177,10 +179,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                       final imageFile = File(imagePath);
                       await imageFile.writeAsBytes(image);
 
-                      await Share.shareXFiles(
-                        [XFile(imagePath)],
+                      await SharePlus.instance.share(ShareParams(
+                        files: [XFile(imagePath)],
                         text: '扫描二维码导入${_config.babyName}的成长日记配置',
-                      );
+                      ));
                     }
                   },
                   color: Colors.white,
@@ -211,7 +213,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           decoration: BoxDecoration(
-            color: isOutlined ? Colors.white.withOpacity(0.2) : color,
+            color: isOutlined ? Colors.white.withValues(alpha: 0.2) : color,
             borderRadius: BorderRadius.circular(30),
             border:
                 isOutlined ? Border.all(color: Colors.white, width: 1.5) : null,
