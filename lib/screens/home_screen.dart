@@ -5,7 +5,6 @@ import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'package:exif/exif.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:video_compress/video_compress.dart';
 import '../models/app_config.dart';
 import '../models/diary_entry.dart';
 import '../services/cloud_storage_service.dart';
@@ -16,6 +15,7 @@ import '../services/qr_service.dart';
 import 'settings_screen.dart';
 import 'diary_editor_screen.dart';
 import 'batch_video_editor_screen.dart';
+import 'upload_tasks_screen.dart';
 import '../components/birth_date_label.dart';
 import '../components/pregnancy_label.dart';
 import '../components/current_month_separator.dart';
@@ -124,6 +124,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     _scrollController.dispose();
     WidgetsBinding.instance.removeObserver(this);
+    BackgroundUploadService.removeUploadProgressCallback(
+        _onUploadProgressUpdated);
+    BackgroundUploadService.removeUploadCompletedCallback(_onUploadCompleted);
     super.dispose();
   }
 
@@ -531,65 +534,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return;
       }
 
-      // 检查并压缩大视频
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const AlertDialog(
-            content: Row(
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 16),
-                Text('正在压缩视频...'),
-              ],
-            ),
-          ),
-        );
-      }
-      final compressedPaths = <String>[];
-      for (final path in editedPaths) {
-        final file = File(path);
-        final sizeInMB = await file.length() / (1024 * 1024);
-        if (currentConfig.videoCompressionThreshold > 0 &&
-            sizeInMB > currentConfig.videoCompressionThreshold) {
-          // 显示压缩提示
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text(
-                      '视频超过${currentConfig.videoCompressionThreshold}MB，正在压缩...')),
-            );
-          }
-          // 压缩视频
-          final compressedFile = await _compressVideo(path);
-          if (compressedFile != null) {
-            compressedPaths.add(compressedFile.path);
-          } else {
-            // 压缩失败，使用原文件
-            compressedPaths.add(path);
-          }
-        } else {
-          compressedPaths.add(path);
-        }
-      }
-      if (mounted) {
-        Navigator.of(context).pop(); // 关闭压缩 loading
-      }
-
-      // 如果没有有效的视频文件，取消上传
-      if (compressedPaths.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('没有有效的视频文件，取消上传')),
-          );
-        }
-        return;
-      }
-
       // 启动后台上传
       await BackgroundUploadService.startBackgroundUpload(
-        mediaPaths: compressedPaths,
+        mediaPaths: editedPaths,
         description: description,
         config: currentConfig,
         overrideDate: selectedDate,
@@ -610,20 +557,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           SnackBar(content: Text('启动后台上传失败: $e')),
         );
       }
-    }
-  }
-
-  Future<File?> _compressVideo(String videoPath) async {
-    try {
-      final info = await VideoCompress.compressVideo(
-        videoPath,
-        quality: VideoQuality.MediumQuality,
-        deleteOrigin: false, // 不删除原文件
-      );
-      return info?.file;
-    } catch (e) {
-      debugPrint('Video compression failed: $e');
-      return null;
     }
   }
 
@@ -676,7 +609,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _updateUploadProgress() {
     final allTasks = BackgroundUploadService.getAllUploadTasks();
     final activeTasks = allTasks
-        .where((task) => task.status == UploadStatus.uploading)
+        .where((task) =>
+            task.status == UploadStatus.uploading ||
+            task.status == UploadStatus.compressing)
         .toList();
 
     // 计算当前上传进度
@@ -742,13 +677,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.upload, size: 20),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const UploadTasksScreen(),
+                      ),
+                    );
+                  },
+                  tooltip: '查看上传任务',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
               ],
             ],
