@@ -532,6 +532,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       // 检查并压缩大视频
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('正在压缩视频...'),
+              ],
+            ),
+          ),
+        );
+      }
       final compressedPaths = <String>[];
       for (final path in editedPaths) {
         final file = File(path);
@@ -557,6 +572,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         } else {
           compressedPaths.add(path);
         }
+      }
+      if (mounted) {
+        Navigator.of(context).pop(); // 关闭压缩 loading
       }
 
       // 如果没有有效的视频文件，取消上传
