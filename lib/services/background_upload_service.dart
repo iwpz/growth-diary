@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:video_compress/video_compress.dart';
 import '../models/app_config.dart';
 import '../services/webdav_service.dart';
 import '../services/entry_creation_service.dart';
@@ -11,6 +12,7 @@ import '../services/entry_creation_service.dart';
 // 上传任务状态枚举
 enum UploadStatus {
   pending, // 等待开始
+  compressing, // 正在压缩
   uploading, // 正在上传
   paused, // 已暂停
   completed, // 已完成
@@ -30,6 +32,7 @@ class UploadTask {
   int uploadedCount; // 已上传的文件数量
   List<String> failedFiles; // 上传失败的文件列表
   String? errorMessage;
+  Map<String, UploadStatus> fileStatuses; // 每个文件的状态
 
   UploadTask({
     required this.id,
@@ -42,8 +45,10 @@ class UploadTask {
     this.uploadedCount = 0,
     List<String>? failedFiles,
     this.errorMessage,
+    Map<String, UploadStatus>? fileStatuses,
   })  : createdAt = createdAt ?? DateTime.now(),
-        failedFiles = failedFiles ?? [];
+        failedFiles = failedFiles ?? [],
+        fileStatuses = fileStatuses ?? {};
 
   // 从JSON创建UploadTask
   factory UploadTask.fromJson(Map<String, dynamic> json) {
@@ -60,6 +65,10 @@ class UploadTask {
       uploadedCount: json['uploadedCount'] as int,
       failedFiles: (json['failedFiles'] as List?)?.cast<String>() ?? [],
       errorMessage: json['errorMessage'] as String?,
+      fileStatuses: (json['fileStatuses'] as Map<String, dynamic>?)?.map(
+            (key, value) => MapEntry(key, UploadStatus.values[value as int]),
+          ) ??
+          {},
     );
   }
 
@@ -76,6 +85,8 @@ class UploadTask {
       'uploadedCount': uploadedCount,
       'failedFiles': failedFiles,
       'errorMessage': errorMessage,
+      'fileStatuses':
+          fileStatuses.map((key, value) => MapEntry(key, value.index)),
     };
   }
 
@@ -101,11 +112,11 @@ class BackgroundUploadService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  // 上传完成回调
-  static Function()? _onUploadCompleted;
+  // 上传完成回调列表
+  static final List<Function()> _onUploadCompletedCallbacks = [];
 
-  // 上传进度更新回调
-  static Function()? _onUploadProgressUpdated;
+  // 上传进度更新回调列表
+  static final List<Function()> _onUploadProgressUpdatedCallbacks = [];
 
   // 跟踪活跃的上传任务
   static final Map<String, UploadTask> _activeTasks = {};
@@ -179,12 +190,22 @@ class BackgroundUploadService {
 
   // 设置上传完成回调
   static void setUploadCompletedCallback(Function() callback) {
-    _onUploadCompleted = callback;
+    _onUploadCompletedCallbacks.add(callback);
+  }
+
+  // 移除上传完成回调
+  static void removeUploadCompletedCallback(Function() callback) {
+    _onUploadCompletedCallbacks.remove(callback);
   }
 
   // 设置上传进度更新回调
   static void setUploadProgressCallback(Function() callback) {
-    _onUploadProgressUpdated = callback;
+    _onUploadProgressUpdatedCallbacks.add(callback);
+  }
+
+  // 移除上传进度更新回调
+  static void removeUploadProgressCallback(Function() callback) {
+    _onUploadProgressUpdatedCallbacks.remove(callback);
   }
 
   static Future<void> _showProgressNotification(
@@ -288,6 +309,7 @@ class BackgroundUploadService {
       config: config,
       overrideDate: overrideDate,
       status: UploadStatus.uploading,
+      fileStatuses: {for (final path in mediaPaths) path: UploadStatus.pending},
     );
 
     // 保存到内存和持久化存储
@@ -342,108 +364,161 @@ class BackgroundUploadService {
         }
       }
 
-      // 处理视频文件
-      if (videoFiles.isNotEmpty) {
-        final validVideoFiles = <XFile>[];
-        for (final videoPath in videoFiles) {
-          final videoFile = File(videoPath);
-          if (!await videoFile.exists()) {
-            task.failedFiles.add(videoPath);
-            task.errorMessage = '视频文件不存在: $videoPath';
-            await _saveUploadTask(task);
-            continue;
-          }
-          validVideoFiles.add(XFile(videoFile.path));
+      // 处理视频文件 - 逐个压缩，收集结果后批量上传
+      final validVideoFiles = <XFile>[];
+      for (final videoPath in videoFiles) {
+        final videoFile = File(videoPath);
+        if (!await videoFile.exists()) {
+          task.failedFiles.add(videoPath);
+          task.errorMessage = '视频文件不存在: $videoPath';
+          task.fileStatuses[videoPath] = UploadStatus.failed;
+          await _saveUploadTask(task);
+          continue;
         }
 
-        if (validVideoFiles.isNotEmpty) {
-          try {
-            await entryService.createVideoEntry(
-              validVideoFiles,
-              task.description,
-              task.config,
-              (uploaded, total) {
-                // 视频上传进度：设置总数
-                task.uploadedCount = task.uploadedCount + uploaded;
-                print(
-                    'Video upload progress: uploaded=$uploaded, total=$total, task.uploadedCount=${task.uploadedCount}/${task.mediaPaths.length}');
-                _showProgressNotification(
-                    task.uploadedCount, task.mediaPaths.length, '正在上传视频...');
-                _saveUploadTask(task); // 实时保存进度
-                _onUploadProgressUpdated?.call(); // 通知UI更新进度
-              },
-              task.overrideDate,
-            );
-          } catch (e) {
-            task.errorMessage = '视频上传失败: $e';
-            await _saveUploadTask(task);
+        // 检查是否需要压缩
+        final sizeInMB = await videoFile.length() / (1024 * 1024);
+        XFile fileToUpload;
+
+        if (task.config.videoCompressionThreshold > 0 &&
+            sizeInMB > task.config.videoCompressionThreshold) {
+          // 需要压缩
+          task.fileStatuses[videoPath] = UploadStatus.compressing;
+          await _saveUploadTask(task);
+          await _showProgressNotification(
+              task.uploadedCount, task.mediaPaths.length, '正在压缩视频...');
+
+          // 通知UI更新
+          for (final callback in _onUploadProgressUpdatedCallbacks) {
+            callback();
           }
+
+          final compressedFile = await _compressVideo(videoPath);
+          if (compressedFile != null) {
+            fileToUpload = XFile(compressedFile.path);
+          } else {
+            // 压缩失败，使用原文件
+            fileToUpload = XFile(videoFile.path);
+          }
+        } else {
+          // 不需要压缩
+          fileToUpload = XFile(videoFile.path);
+        }
+
+        validVideoFiles.add(fileToUpload);
+        task.fileStatuses[videoPath] = UploadStatus.uploading;
+      }
+
+      // 批量上传视频文件
+      if (validVideoFiles.isNotEmpty) {
+        try {
+          task.status = UploadStatus.uploading;
+          await _saveUploadTask(task);
+
+          await entryService.createVideoEntry(
+            validVideoFiles,
+            task.description,
+            task.config,
+            (uploaded, total) {
+              // 视频上传进度
+              task.uploadedCount = uploaded;
+              print(
+                  'Video upload progress: uploaded=$uploaded, total=$total, task.uploadedCount=${task.uploadedCount}/${task.mediaPaths.length}');
+              _showProgressNotification(
+                  task.uploadedCount, task.mediaPaths.length, '正在上传视频...');
+              _saveUploadTask(task); // 实时保存进度
+              for (final callback in _onUploadProgressUpdatedCallbacks) {
+                callback(); // 通知UI更新进度
+              }
+            },
+            task.overrideDate,
+          );
+
+          // 上传完成后设置所有视频文件状态为完成
+          for (final videoPath in videoFiles) {
+            if (!task.failedFiles.contains(videoPath)) {
+              task.fileStatuses[videoPath] = UploadStatus.completed;
+            }
+          }
+          task.uploadedCount += validVideoFiles.length;
+          // 检查任务是否完成
+          _checkTaskCompletion(task);
+        } catch (e) {
+          task.errorMessage = '视频上传失败: $e';
+          // 将所有视频文件标记为失败
+          for (final videoPath in videoFiles) {
+            if (!task.failedFiles.contains(videoPath)) {
+              task.failedFiles.add(videoPath);
+              task.fileStatuses[videoPath] = UploadStatus.failed;
+            }
+          }
+          await _saveUploadTask(task);
         }
       }
 
-      // 处理图片文件
-      if (imageFiles.isNotEmpty) {
-        final validImageFiles = <XFile>[];
-        for (final imagePath in imageFiles) {
-          final imageFile = File(imagePath);
-          if (!await imageFile.exists()) {
-            task.failedFiles.add(imagePath);
-            task.errorMessage = '图片文件不存在: $imagePath';
-            await _saveUploadTask(task);
-            continue;
-          }
-          validImageFiles.add(XFile(imageFile.path));
+      // 处理图片文件 - 批量上传
+      final validImageFiles = <XFile>[];
+      for (final imagePath in imageFiles) {
+        final imageFile = File(imagePath);
+        if (!await imageFile.exists()) {
+          task.failedFiles.add(imagePath);
+          task.errorMessage = '图片文件不存在: $imagePath';
+          task.fileStatuses[imagePath] = UploadStatus.failed;
+          await _saveUploadTask(task);
+          continue;
         }
+        validImageFiles.add(XFile(imageFile.path));
+        task.fileStatuses[imagePath] = UploadStatus.uploading;
+      }
 
-        if (validImageFiles.isNotEmpty) {
-          try {
-            await entryService.createImageEntry(
-              validImageFiles,
-              task.description,
-              task.config,
-              (uploaded, total) {
-                // 图片上传进度：设置总数
-                task.uploadedCount = uploaded;
-                print(
-                    'Image upload progress: uploaded=$uploaded, total=$total, task.uploadedCount=${task.uploadedCount}/${task.mediaPaths.length}');
-                _showProgressNotification(
-                    task.uploadedCount, task.mediaPaths.length, '正在上传图片...');
-                _saveUploadTask(task); // 实时保存进度
-                _onUploadProgressUpdated?.call(); // 通知UI更新进度
-              },
-              task.overrideDate,
-            );
-          } catch (e) {
-            task.errorMessage = '图片上传失败: $e';
-            await _saveUploadTask(task);
+      // 批量上传图片文件
+      if (validImageFiles.isNotEmpty) {
+        try {
+          task.status = UploadStatus.uploading;
+          await _saveUploadTask(task);
+
+          await entryService.createImageEntry(
+            validImageFiles,
+            task.description,
+            task.config,
+            (uploaded, total) {
+              // 图片上传进度
+              task.uploadedCount = uploaded;
+              print(
+                  'Image upload progress: uploaded=$uploaded, total=$total, task.uploadedCount=${task.uploadedCount}/${task.mediaPaths.length}');
+              _showProgressNotification(
+                  task.uploadedCount, task.mediaPaths.length, '正在上传图片...');
+              _saveUploadTask(task); // 实时保存进度
+              for (final callback in _onUploadProgressUpdatedCallbacks) {
+                callback(); // 通知UI更新进度
+              }
+            },
+            task.overrideDate,
+          );
+
+          // 上传完成后设置所有图片文件状态为完成
+          for (final imagePath in imageFiles) {
+            if (!task.failedFiles.contains(imagePath)) {
+              task.fileStatuses[imagePath] = UploadStatus.completed;
+            }
           }
+          task.uploadedCount += validImageFiles.length;
+          // 检查任务是否完成
+          _checkTaskCompletion(task);
+        } catch (e) {
+          task.errorMessage = '图片上传失败: $e';
+          // 将所有图片文件标记为失败
+          for (final imagePath in imageFiles) {
+            if (!task.failedFiles.contains(imagePath)) {
+              task.failedFiles.add(imagePath);
+              task.fileStatuses[imagePath] = UploadStatus.failed;
+            }
+          }
+          await _saveUploadTask(task);
         }
       }
 
-      // 检查是否还有失败的文件
-      if (task.failedFiles.isNotEmpty) {
-        task.status = UploadStatus.failed;
-        task.errorMessage = '部分文件上传失败: ${task.failedFiles.join(", ")}';
-      } else {
-        task.status = UploadStatus.completed;
-        // 上传完成，调用回调刷新首页
-        _onUploadCompleted?.call();
-      }
-
-      await _saveUploadTask(task);
-
-      // 显示完成通知
-      if (task.status == UploadStatus.completed) {
-        // 只使用专门的完成通知，确保能正确自动消失
-        await _showCompletionNotification('所有文件上传完成');
-      } else {
-        await _showProgressNotification(
-          task.uploadedCount,
-          task.mediaPaths.length,
-          task.errorMessage ?? '上传失败',
-          isError: true,
-        );
-      }
+      // 注意：任务完成检查现在在每个文件上传完成后进行
     } catch (e) {
       // 更新任务状态为失败
       task.status = UploadStatus.failed;
@@ -594,9 +669,122 @@ class BackgroundUploadService {
     }
   }
 
+  // 公共方法：暂停上传任务
+  static Future<void> pauseUpload(String uploadId) async {
+    final task = _activeTasks[uploadId];
+    if (task != null && task.status == UploadStatus.uploading) {
+      task.status = UploadStatus.paused;
+      await _saveUploadTask(task);
+      // 取消通知
+      await _notificationsPlugin.cancel(0);
+    }
+  }
+
+  // 公共方法：恢复上传任务
+  static Future<void> resumeUpload(String uploadId) async {
+    final task = _activeTasks[uploadId];
+    if (task != null && task.status == UploadStatus.paused) {
+      task.status = UploadStatus.uploading;
+      await _saveUploadTask(task);
+      _performAsyncUpload(task);
+    }
+  }
+
+  // 公共方法：删除上传任务中的某个文件
+  static Future<void> removeFileFromTask(String taskId, String filePath) async {
+    final task = _activeTasks[taskId];
+    if (task != null) {
+      task.mediaPaths.remove(filePath);
+      task.fileStatuses.remove(filePath);
+      if (task.mediaPaths.isEmpty) {
+        // 如果没有文件了，删除任务
+        await deleteUploadTask(taskId);
+      } else {
+        await _saveUploadTask(task);
+      }
+    }
+  }
+
+  // 公共方法：删除上传任务
+  static Future<void> deleteUploadTask(String uploadId) async {
+    _activeTasks.remove(uploadId);
+    _activeUploads.remove(uploadId);
+    await _removeUploadTask(uploadId);
+  }
+
+  // 公共方法：清空所有上传任务
+  static Future<void> clearAllUploadTasks() async {
+    _activeTasks.clear();
+    _activeUploads.clear();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_uploadTasksKey);
+    // 取消通知
+    await _notificationsPlugin.cancel(0);
+    await _notificationsPlugin.cancel(1);
+  }
+
   static bool _isVideoFile(String path) {
     final extension = path.split('.').last.toLowerCase();
     return ['mp4', 'mov', 'avi', 'mkv', 'wmv', 'flv', 'webm']
         .contains(extension);
+  }
+
+  // 检查任务是否完成
+  static Future<void> _checkTaskCompletion(UploadTask task) async {
+    final totalProcessed = task.uploadedCount + task.failedFiles.length;
+    if (totalProcessed >= task.mediaPaths.length) {
+      // 所有文件都已处理完成
+      if (task.failedFiles.isNotEmpty) {
+        task.status = UploadStatus.failed;
+        task.errorMessage = '部分文件上传失败: ${task.failedFiles.join(", ")}';
+        // 设置失败文件的状态
+        for (final failedFile in task.failedFiles) {
+          task.fileStatuses[failedFile] = UploadStatus.failed;
+        }
+      } else {
+        task.status = UploadStatus.completed;
+        // 设置所有文件的状态为完成
+        for (final filePath in task.mediaPaths) {
+          if (!task.failedFiles.contains(filePath)) {
+            task.fileStatuses[filePath] = UploadStatus.completed;
+          }
+        }
+        // 上传完成，调用回调刷新首页
+        for (final callback in _onUploadCompletedCallbacks) {
+          callback();
+        }
+      }
+      await _saveUploadTask(task);
+
+      // 显示完成通知
+      if (task.status == UploadStatus.completed) {
+        await _showCompletionNotification('所有文件上传完成');
+      } else {
+        await _showProgressNotification(
+          task.uploadedCount,
+          task.mediaPaths.length,
+          task.errorMessage ?? '上传失败',
+          isError: true,
+        );
+      }
+
+      // 清理活跃上传标记
+      _activeTasks.remove(task.id);
+      _activeUploads.remove(task.id);
+    }
+  }
+
+  static Future<File?> _compressVideo(String videoPath) async {
+    try {
+      final info = await VideoCompress.compressVideo(
+        videoPath,
+        quality: VideoQuality.MediumQuality,
+        deleteOrigin: false, // 不删除原文件
+      );
+      return info?.file;
+    } catch (e) {
+      debugPrint('Video compression failed: $e');
+      return null;
+    }
   }
 }
